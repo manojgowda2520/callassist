@@ -18,7 +18,7 @@ Sources:
 
 | Feature | When the client declares it (our simulator, Claude) | When it doesn't (Alexa+ as documented) |
 | --- | --- | --- |
-| Tasks (long-running calls) | `request_quotes` returns a task; the client polls `tasks/get` | `request_quotes` returns right away with an `errandId`; the client calls `get_quotes` |
+| Tasks (long-running calls) | `request_quotes` or `call_contact` returns a task; the client polls `tasks/get` | The tool returns right away with an `errandId`; the client calls `get_call_status` |
 | Elicitation (confirm, missing details) | A form asks for name and phone, or for Confirm | A two-step tool call: the first returns a read-back, the second carries `confirmed: true` |
 | UI (`_meta.ui.resourceUri`) | Live call cards and an options carousel | Alexa+ renders from `structuredContent` (its documented data-only flow) |
 
@@ -44,15 +44,33 @@ Alexa+ uses two tiers. Both follow the checklist on the Authentication page.
 
 ## 3. Tools: one customer intent each, chained by stable IDs
 
+Callie does two jobs, both by phone: **booking appointments** with local businesses, and **passing messages** to the user's trusted contacts and bringing back the reply.
+
+**Job 1: appointments**
+
 | Tool | Customer intent | Auth tier | Notes |
 | --- | --- | --- | --- |
 | `find_providers` | "Find me a … near …" | 1 | Returns in under 3 s. Up to 5 options (we use 3) and a `searchId`. Sorts by rating, distance or price |
 | `request_quotes` | "Call them and ask" | 2 | Starts the calls. Returns an `errandId` and an interim message |
-| `get_quotes` | "What did they say?" | 2 | Per-call status and quotes. Safe to call repeatedly |
 | `book_appointment` | "Book the 3:30" | 2 | Read-back first, then executes only with explicit confirmation. Blocks duplicate bookings |
 | `list_appointments` | "What's coming up?" | 2 | Current status with key details |
 | `reschedule_appointment` | "Move it to Friday" | 2 | Changes one parameter and keeps the rest |
 | `cancel_appointment` | "Cancel my haircut" | 2 | Reads back the business's cancellation policy, requires confirmation, then calls the business to cancel |
+
+**Job 2: messages to trusted contacts**
+
+| Tool | Customer intent | Auth tier | Notes |
+| --- | --- | --- | --- |
+| `find_contact` | "Call Grandma" / "Tell Manju…" | 2 | Looks up the name in the user's own trusted contacts. Asks which one when two match |
+| `call_contact` | "Tell Grandma I'll pick her up at 5, and ask if she needs anything" | 2 | Reads back who will be called and the exact message, waits for "yes", then calls. Can carry one question and bring back the answer |
+
+**Shared by both jobs**
+
+| Tool | Customer intent | Auth tier | Notes |
+| --- | --- | --- | --- |
+| `get_call_status` | "What did they say?" | 2 | Status and result of any call: quotes, a booking, or a contact's reply. Safe to call repeatedly |
+
+**Tools the phone agent uses** (through AgentCore Gateway): `get_call_brief`, `report_quote`, `report_booking`, `report_reply`. Each errand's brief tells the agent which job it's doing: `inquiry`, `booking` or `message`.
 
 Rules from Functional Requirements §13 that every tool follows:
 - Every listed tool works; there are no placeholders.
@@ -76,23 +94,34 @@ Rules from Functional Requirements §13 that every tool follows:
 - Confirm the booking details by voice before executing (Policy §15).
 - After a booking, confirm by voice **and** by email (SES) (Policy §15).
 - The customer can cancel at any time, including in a later conversation.
-- Show a one-time permission prompt before first use, and disclose the data collected: name, callback phone, insurance carrier (Policy §3).
+- Show a one-time permission prompt before first use, and disclose the data collected: name, callback phone, insurance carrier, trusted contacts (Policy §3).
+- Read back the exact message and who will be called before any `call_contact`, and wait for an explicit "yes".
 - Collect only what each booking needs. Never read private data aloud. Delete call data after the booking is done.
 - No payments in v1, so the purchase rules (>$100 voice code and the rest) don't apply.
 - **Health (§13):** never claim emergency help; say "for emergencies, call 911"; include a short "not medical advice" line.
 - **Children (§4):** "Your add-on must never target children or collect their data." See the next section.
 
-## 6. Demo change this forces
+## 6. Trusted contacts and consent
 
-Booking a sick child's pediatrician visit means passing a child's name and symptoms to a clinic. That collides with Policy §4, and Alexa team judges will notice.
+- **Where contacts come from.** Callie can't read the contacts synced to the user's Alexa account. Add-ons get no access to them, and Policy §3 rejects add-ons that collect data about the customer's Alexa environment. Callie keeps its own **trusted contacts** list, added on Callie's web page: name, relationship or role, phone number. Signing in with Google Contacts (read-only) is a later option.
+- **Only trusted contacts get called.** Each contact is added on purpose by the user. A contact must have agreed to receive calls from Callie, because US rules require prior consent for AI-voice calls to mobile numbers.
+- **Opt-out.** If a contact says "don't call me again", Callie marks them and never calls them again.
+- **Disclosure.** Every call opens with "This is Callie, an AI assistant calling for {user}."
+- **Minimum data.** Callie stores only name, label and number per contact, and never reads numbers aloud.
+- **Demo.** Every contact in the demo is a volunteer who agreed in writing.
 
-**Proposed lead demo:** Maya books **her own OB/GYN new-patient visit**. The 2025 national average wait for OB/GYN is 42 days, the longest of any specialty. Calling three offices to find an opening this week tells the same "busy mom" story with no child data. The second beat stays a home repair (plumber) or a salon.
+## 7. Demo story
 
-## 7. Listing assets to include in the repo
+Booking a sick child's pediatrician visit means passing a child's name and symptoms to a clinic. That collides with Policy §4 ("must never target children or collect their data"). So the demo uses two adult scenes:
+
+1. **Appointments (lead):** Maya books **her own OB/GYN new-patient visit**. The 2025 national average wait for OB/GYN is 42 days, the longest of any specialty. Callie calls three offices and finds an opening this week.
+2. **Message:** "Tell Grandma I'll pick her up at 5, and ask if she needs anything from the store." Callie calls Grandma's landline and brings back "milk and bread." This shows Callie reaching people who don't use apps.
+
+## 8. Listing assets to include in the repo
 
 The Metadata section requires these:
 - Name: "Callie", which is easy to say and doesn't clash with Alexa commands
-- Plain-language description that discloses the booking capability and the data collected
+- Plain-language description that discloses the booking capability, the message calls to trusted contacts, and the data collected
 - At least 3 example phrases
 - Icon
 - Privacy Policy and Terms of Use pages, hosted with the simulator
