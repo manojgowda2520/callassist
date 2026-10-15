@@ -1,6 +1,6 @@
-# Alexa+ design rules for Callie
+# Alexa+ design rules for CallAssist
 
-How each rule in Amazon's Alexa+ add-on docs shapes the Callie MCP server. Reviewed 2026-10-14.
+How each rule in Amazon's Alexa+ add-on docs shapes the CallAssist MCP server. Reviewed 2026-10-14.
 
 Sources:
 - [MCP Client and App Lifecycle](https://developer.amazon.com/docs/alexaplus/add-ons/mcp-toolkit-client-lifecycle.html)
@@ -44,7 +44,7 @@ Alexa+ uses two tiers. Both follow the checklist on the Authentication page.
 
 ## 3. Tools: one customer intent each, chained by stable IDs
 
-Callie does two jobs, both by phone: **booking appointments** with local businesses, and **passing messages** to the user's trusted contacts and bringing back the reply.
+CallAssist does two jobs, both by phone: **booking appointments** with local businesses, and **passing messages** to the user's trusted contacts and bringing back the reply.
 
 **Job 1: appointments**
 
@@ -103,20 +103,20 @@ Rules from Functional Requirements §13 that every tool follows:
 
 ## 6. Trusted contacts and consent
 
-- **Where contacts come from.** Callie can't read the contacts synced to the user's Alexa account. Add-ons get no access to them, and Policy §3 rejects add-ons that collect data about the customer's Alexa environment. Callie keeps its own **trusted contacts** list, added on Callie's web page: name, relationship or role, phone number. Signing in with Google Contacts (read-only) is a later option.
-- **Only trusted contacts get called.** Each contact is added on purpose by the user. A contact must have agreed to receive calls from Callie, because US rules require prior consent for AI-voice calls to mobile numbers.
-- **Opt-out.** If a contact says "don't call me again", Callie marks them and never calls them again.
-- **Disclosure.** Every call opens with "This is Callie, an AI assistant calling for {user}."
-- **Minimum data.** Callie stores only name, label and number per contact, and never reads numbers aloud.
+- **Where contacts come from.** CallAssist can't read the contacts synced to the user's Alexa account. Add-ons get no access to them, and Policy §3 rejects add-ons that collect data about the customer's Alexa environment. CallAssist keeps its own **trusted contacts** list, added on CallAssist's web page: name, relationship or role, phone number. Signing in with Google Contacts (read-only) is a later option.
+- **Only trusted contacts get called.** Each contact is added on purpose by the user. A contact must have agreed to receive calls from CallAssist, because US rules require prior consent for AI-voice calls to mobile numbers.
+- **Opt-out.** If a contact says "don't call me again", CallAssist marks them and never calls them again.
+- **Disclosure.** Every call opens with "This is CallAssist, an AI assistant calling for {user}."
+- **Minimum data.** CallAssist stores only name, label and number per contact, and never reads numbers aloud.
 - **Demo.** Every contact in the demo is a volunteer who agreed in writing.
 
 ## 6b. Living next to Alexa's built-in calling and messaging
 
-Alexa already has calling and messaging. "Alexa, call Mom" connects **you** to Mom like a phone call. "Send a message to Mom" sends a voice or text message to her Alexa app. Callie's tools must not compete with those commands.
+Alexa already has calling and messaging. "Alexa, call Mom" connects **you** to Mom like a phone call. "Send a message to Mom" sends a voice or text message to her Alexa app. CallAssist's tools must not compete with those commands.
 
-| | Built-in Alexa calling and messaging | Callie |
+| | Built-in Alexa calling and messaging | CallAssist |
 | --- | --- | --- |
-| Who talks on the call | You | Callie's AI voice, for you |
+| Who talks on the call | You | CallAssist's AI voice, for you |
 | What comes back | Nothing; you hear it live, or the message is just delivered | The other person's answer, reported back to you |
 | Who it reaches | Contacts with a phone, or with the Alexa app for messaging | Any phone, including landlines, with no app needed |
 | Businesses | Not supported | Prices, open slots, booking |
@@ -124,20 +124,20 @@ Alexa already has calling and messaging. "Alexa, call Mom" connects **you** to M
 Rules that follow from this:
 
 - **Don't claim plain calling.** `call_contact` never connects the user into a live call. Its description says it delivers a message and brings back the reply.
-- **Use delegation wording** in tool descriptions and example phrases: "have Callie call…", "ask Grandma if…", "find out from Manju whether…". This leaves "call Mom" to Alexa.
-- **Partners first for bookings.** If a business can be booked through an Alexa+ partner (Vagaro, Thumbtack and others), that path is better. Callie handles businesses that only answer the phone.
+- **Use delegation wording** in tool descriptions and example phrases: "have CallAssist call…", "ask Grandma if…", "find out from Manju whether…". This leaves "call Mom" to Alexa.
+- **Partners first for bookings.** If a business can be booked through an Alexa+ partner (Vagaro, Thumbtack and others), that path is better. CallAssist handles businesses that only answer the phone.
 
 ## 7. Demo story
 
 Booking a sick child's pediatrician visit means passing a child's name and symptoms to a clinic. That collides with Policy §4 ("must never target children or collect their data"). So the demo uses two adult scenes:
 
-1. **Appointments (lead):** Maya books **her own OB/GYN new-patient visit**. The 2025 national average wait for OB/GYN is 42 days, the longest of any specialty. Callie calls three offices and finds an opening this week.
-2. **Message:** "Tell Grandma I'll pick her up at 5, and ask if she needs anything from the store." Callie calls Grandma's landline and brings back "milk and bread." This shows Callie reaching people who don't use apps.
+1. **Appointments (lead):** Maya books **her own OB/GYN new-patient visit**. The 2025 national average wait for OB/GYN is 42 days, the longest of any specialty. CallAssist calls three offices and finds an opening this week.
+2. **Message:** "Tell Grandma I'll pick her up at 5, and ask if she needs anything from the store." CallAssist calls Grandma's landline and brings back "milk and bread." This shows CallAssist reaching people who don't use apps.
 
 ## 8. Listing assets to include in the repo
 
 The Metadata section requires these:
-- Name: "Callie", which is easy to say and doesn't clash with Alexa commands
+- Name: "CallAssist", which is easy to say and doesn't clash with Alexa commands
 - Plain-language description that discloses the booking capability, the message calls to trusted contacts, and the data collected
 - At least 3 example phrases
 - Icon

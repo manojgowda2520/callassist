@@ -1,6 +1,6 @@
 # Calling by region
 
-Callie picks the phone line by the destination number's country:
+CallAssist picks the phone line by the destination number's country:
 
 - **US numbers (+1)** go through **Amazon Connect** in us-east-1. This is the only path built for the hackathon.
 - **India numbers (+91)** go through **Mobil80's Asterisk server and its Airtel SIP trunk**. This path is planned for after the hackathon.
@@ -18,7 +18,7 @@ So the India path uses Asterisk, with our own audio bridge to Nova Sonic.
 ## How a call is routed
 
 ```
-Callie MCP server
+CallAssist MCP server
   └── call router: looks at the destination number
         ├── +1  → ConnectProvider  → StartOutboundVoiceContact → Connect AI agent (Nova Sonic)
         └── +91 → SipProvider      → Asterisk originate (Airtel SIP)
@@ -53,4 +53,4 @@ Both providers share everything above the phone line:
 
 - **Approval.** The approval form said no company SIP trunks would be used. Using the Airtel trunk needs a separate OK from the manager.
 - **Indian telecom rules.** Automated or AI calls over an enterprise SIP trunk fall under TRAI and DoT rules. Review this with whoever handles compliance for Mobil80's existing voice campaigns.
-- **Client.** Alexa+ isn't available in India yet. Indian users would reach Callie through our web app, another MCP client, or a classic Alexa skill.
+- **Client.** Alexa+ isn't available in India yet. Indian users would reach CallAssist through our web app, another MCP client, or a classic Alexa skill.

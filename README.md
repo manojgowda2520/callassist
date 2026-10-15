@@ -1,6 +1,6 @@
-# Callie: an Alexa+ MCP server that makes your phone calls
+# CallAssist: an Alexa+ MCP server that makes your phone calls
 
-Callie is an AI that makes phone calls for you. You ask Alexa+, and Callie does one of two jobs:
+CallAssist is an AI that makes phone calls for you. You ask Alexa+, and CallAssist does one of two jobs:
 
 - **Books appointments.** It calls the top 3 nearby businesses at once, asks each for its price and next open slot, reports back, and books the one you choose.
 - **Passes messages.** It calls someone from your trusted contacts, delivers your message, and brings back their reply.
@@ -33,7 +33,7 @@ Nothing is booked, and no one is called, without your "yes". Only contacts you'v
 
 ## Docs
 
-- [Alexa+ design rules and how Callie follows them](docs/alexa-plus-design-rules.md)
+- [Alexa+ design rules and how CallAssist follows them](docs/alexa-plus-design-rules.md)
 - [Calling by region: Amazon Connect for the US, a SIP trunk for India](docs/telephony-regions.md)
 - [Friction log](FRICTION_LOG.md)
 
