@@ -110,6 +110,23 @@ Rules from Functional Requirements §13 that every tool follows:
 - **Minimum data.** Callie stores only name, label and number per contact, and never reads numbers aloud.
 - **Demo.** Every contact in the demo is a volunteer who agreed in writing.
 
+## 6b. Living next to Alexa's built-in calling and messaging
+
+Alexa already has calling and messaging. "Alexa, call Mom" connects **you** to Mom like a phone call. "Send a message to Mom" sends a voice or text message to her Alexa app. Callie's tools must not compete with those commands.
+
+| | Built-in Alexa calling and messaging | Callie |
+| --- | --- | --- |
+| Who talks on the call | You | Callie's AI voice, for you |
+| What comes back | Nothing; you hear it live, or the message is just delivered | The other person's answer, reported back to you |
+| Who it reaches | Contacts with a phone, or with the Alexa app for messaging | Any phone, including landlines, with no app needed |
+| Businesses | Not supported | Prices, open slots, booking |
+
+Rules that follow from this:
+
+- **Don't claim plain calling.** `call_contact` never connects the user into a live call. Its description says it delivers a message and brings back the reply.
+- **Use delegation wording** in tool descriptions and example phrases: "have Callie call…", "ask Grandma if…", "find out from Manju whether…". This leaves "call Mom" to Alexa.
+- **Partners first for bookings.** If a business can be booked through an Alexa+ partner (Vagaro, Thumbtack and others), that path is better. Callie handles businesses that only answer the phone.
+
 ## 7. Demo story
 
 Booking a sick child's pediatrician visit means passing a child's name and symptoms to a clinic. That collides with Policy §4 ("must never target children or collect their data"). So the demo uses two adult scenes:
