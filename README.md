@@ -1,6 +1,6 @@
-# Legwork: an Alexa+ MCP server that makes the phone calls
+# Callie: an Alexa+ MCP server that makes the phone calls
 
-Ask Alexa+ for an appointment. Legwork phones the top 3 nearby businesses, asks each for its price and next open slot, reports back, and books the one you choose.
+Ask Alexa+ for an appointment. Callie phones the top 3 nearby businesses, asks each for its price and next open slot, reports back, and books the one you choose.
 
 > Status: in development for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges).
 
@@ -22,7 +22,7 @@ Ask Alexa+ for an appointment. Legwork phones the top 3 nearby businesses, asks 
 
 ## Docs
 
-- [Alexa+ design rules and how Legwork follows them](docs/alexa-plus-design-rules.md)
+- [Alexa+ design rules and how Callie follows them](docs/alexa-plus-design-rules.md)
 - [Friction log](FRICTION_LOG.md)
 
 ## License

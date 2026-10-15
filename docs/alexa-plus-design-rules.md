@@ -1,6 +1,6 @@
-# Alexa+ design rules for Legwork
+# Alexa+ design rules for Callie
 
-How each rule in Amazon's Alexa+ add-on docs shapes the Legwork MCP server. Reviewed 2026-10-14.
+How each rule in Amazon's Alexa+ add-on docs shapes the Callie MCP server. Reviewed 2026-10-14.
 
 Sources:
 - [MCP Client and App Lifecycle](https://developer.amazon.com/docs/alexaplus/add-ons/mcp-toolkit-client-lifecycle.html)
@@ -91,7 +91,7 @@ Booking a sick child's pediatrician visit means passing a child's name and sympt
 ## 7. Listing assets to include in the repo
 
 The Metadata section requires these:
-- Name: "Legwork", which is easy to say and doesn't clash with Alexa commands
+- Name: "Callie", which is easy to say and doesn't clash with Alexa commands
 - Plain-language description that discloses the booking capability and the data collected
 - At least 3 example phrases
 - Icon
