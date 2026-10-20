@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallAssist · Local Demo</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  .hero { max-width: 1100px; margin: 0 auto; padding: 48px 20px 10px; }
+  .hero h1 { font-size: clamp(30px, 4.5vw, 50px); margin: 0; letter-spacing: -1px; line-height: 1.05; }
+  .hero p { font-size: 19px; color: var(--ink-2); max-width: 720px; margin: 14px 0 0; }
+  .flow { max-width: 1100px; margin: 26px auto 0; padding: 0 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; position: relative; }
+  @media (max-width: 800px) { .flow { grid-template-columns: 1fr 1fr; } }
+  .step { padding: 18px; position: relative; }
+  .step .k { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; color: #fff; margin-bottom: 10px; }
+  .step h3 { margin: 0; font-size: 17px; }
+  .step p { margin: 6px 0 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.45; }
+  .go { max-width: 1100px; margin: 22px auto; padding: 0 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 800px) { .go { grid-template-columns: 1fr; } }
+  .go a { display: block; padding: 18px; color: var(--ink); }
+  .go a:hover { border-color: var(--brand); }
+  .go b { font-size: 17px; display: block; margin-bottom: 4px; }
+  .go span { color: var(--ink-2); font-size: 14px; }
+  .how { max-width: 1100px; margin: 0 auto 50px; padding: 0 20px; color: var(--ink-2); font-size: 14.5px; line-height: 1.6; }
+  .how code { background: #eef0f3; padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <nav><a href="/alexa">Alexa+ emulator</a><a href="/phones">Team phones</a><a href="/console">Call console</a><a href="/" class="active">About</a></nav>
+</header>
+<section class="hero">
+  <h1>Your personal assistant,<br>on the phone.</h1>
+  <p>Tell Alexa what needs doing. CallAssist calls the right person on your team, explains the job, gets a yes and a time, follows up, and tells you when it's done.</p>
+</section>
+<section class="flow">
+  <div class="step card"><div class="k" style="background:#14161a">A</div><h3>You</h3><p>“Alexa, ask Raju to set up the meeting room by 3.”</p></div>
+  <div class="step card"><div class="k" style="background:#1ec8f0">B</div><h3>Alexa+</h3><p>Understands the request, reads it back, and waits for your yes.</p></div>
+  <div class="step card"><div class="k" style="background:#0a7cff">C</div><h3>CallAssist (MCP)</h3><p>Calls Raju in an AI voice, gets his answer and time, follows up after the deadline.</p></div>
+  <div class="step card"><div class="k" style="background:#15a46a">D</div><h3>Your team</h3><p>Raju answers his normal phone. No app. He can call back anytime with an update.</p></div>
+</section>
+<section class="go">
+  <a class="card" href="/alexa" target="_blank"><b>1 · Alexa+ emulator →</b><span>Talk or type to an Echo Show stand-in. See the real MCP traffic.</span></a>
+  <a class="card" href="/phones" target="_blank"><b>2 · Team phones →</b><span>Your people's phones. They ring, speak and listen, all on this computer.</span></a>
+  <a class="card" href="/console" target="_blank"><b>3 · Call console →</b><span>Every task, every call and transcript, live.</span></a>
+</section>
+<section class="how">
+  <p><b>Everything here runs on this computer.</b> The Alexa+ emulator is a real MCP client that negotiates protocol <code>2025-03-26</code> like Alexa+. The MCP server is at <code>/mcp</code> (Streamable HTTP, spec 2025-11-25). Phone calls go over a local phone network with macOS voices; on AWS the same calls go through Amazon Connect and Nova Sonic, which reach CallAssist through the phone-agent tools at <code>/agent/mcp</code>.</p>
+  <p>Safety: every call starts with an AI disclosure, nothing is called without your explicit yes (checked by the server, not just promised by the AI), only people with a consent record can be called, anyone can say “stop”, calls happen only 8 AM–9 PM in the called person's time zone, tasks about children are declined, and emergencies are sent to 911.</p>
+  <p><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of use</a></p>
+</section>
+</body>
+</html>

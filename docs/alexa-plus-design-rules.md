@@ -44,42 +44,41 @@ Alexa+ uses two tiers. Both follow the checklist on the Authentication page.
 
 ## 3. Tools: one customer intent each, chained by stable IDs
 
-CallAssist does two jobs, both by phone: **booking appointments** with local businesses, and **passing messages** to the user's trusted contacts and bringing back the reply.
-
-**Job 1: appointments**
+CallAssist is a **personal assistant on the phone**. The user tells Alexa+ what needs doing; CallAssist calls the right person on the user's team (staff, home help, family), hands over the task, gets a yes and a time, follows up, and reports back. (Updated 2026-10-21: the earlier appointment-booking tools were replaced by this task model.)
 
 | Tool | Customer intent | Auth tier | Notes |
 | --- | --- | --- | --- |
-| `find_providers` | "Find me a … near …" | 1 | Returns in under 3 s. Up to 5 options (we use 3) and a `searchId`. Sorts by rating, distance or price |
-| `request_quotes` | "Call them and ask" | 2 | Starts the calls. Returns an `errandId` and an interim message |
-| `book_appointment` | "Book the 3:30" | 2 | Read-back first, then executes only with explicit confirmation. Blocks duplicate bookings |
-| `list_appointments` | "What's coming up?" | 2 | Current status with key details |
-| `reschedule_appointment` | "Move it to Friday" | 2 | Changes one parameter and keeps the rest |
-| `cancel_appointment` | "Cancel my haircut" | 2 | Reads back the business's cancellation policy, requires confirmation, then calls the business to cancel |
+| `assign_task` | "Ask Raju to set up the meeting room by 3" | 2 | Read-back first, then runs only with `confirmed=true` **and** the read-back's `confirmationToken`. Parses a due time |
+| `run_errand` | "Get me a coffee" | 2 | Preset errands (coffee, tea, lunch, the car); picks the person by place (office/home). Same read-back gate |
+| `deliver_message` | "Tell Grandma I'll pick her up at 5 and ask if she needs anything" | 2 | Delivers a message plus at most one question; brings back the reply. Never connects the user into a live call |
+| `get_task_status` | "What did Raju say?" | 2 | One task. Safe to repeat. Optional `waitSeconds` (default 0) |
+| `list_tasks` | "What's pending?" | 2 | Several tasks; at most 5 spoken, "and N more" |
+| `follow_up` | "Check with the driver" | 2 | Calls now for an update on an open task |
+| `answer_question` | "Tell him it's room 3" | 2 | When a worker asked a question or hit a problem, calls them back with the user's answer |
+| `cancel_task` | "Cancel the coffee" | 2 | Read-back gate; tells the worker if they had already started |
+| `list_team` | "Who can you call?" / "Is Ravi on my list?" | 2 | Whole team, or one lookup by name, nickname or role. Asks "which one?" when two match |
+| `list_errands` | "What can you get me?" | 2 | Preset errands |
 
-**Job 2: messages to trusted contacts**
+**Phone-agent tools** (for the Amazon Connect AI agent, through AgentCore Gateway, at `/agent/mcp` with their own `agent:calls` token): `get_call_brief` (who, for whom, disclosure, script, goal, rules) and `report_outcome` (`accept`, `decline`, `done`, `blocked`, `question`, `optout`, plus the person's words and an ETA).
 
-| Tool | Customer intent | Auth tier | Notes |
-| --- | --- | --- | --- |
-| `find_contact` | "Call Grandma" / "Tell Manju…" | 2 | Looks up the name in the user's own trusted contacts. Asks which one when two match |
-| `call_contact` | "Tell Grandma I'll pick her up at 5, and ask if she needs anything" | 2 | Reads back who will be called and the exact message, waits for "yes", then calls. Can carry one question and bring back the answer |
+Every tool:
+- Has a JSON Schema input (zod, validated before acting) **and a declared `outputSchema`**; the result's `structuredContent.speech` equals the spoken text.
+- Returns `isError: true` with a spoken next step on failure. Never speaks IDs, codes or tool names.
+- Carries annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`). These are hints only; the server enforces the real rules.
+- Is logged as tool name, argument *shape* (no personal data), result and latency, plus CloudWatch EMF metrics.
 
-**Shared by both jobs**
+### Server-enforced confirmation (OWASP LLM06)
 
-| Tool | Customer intent | Auth tier | Notes |
-| --- | --- | --- | --- |
-| `get_call_status` | "What did they say?" | 2 | Status and result of any call: quotes, a booking, or a contact's reply. Safe to call repeatedly |
+A read-back returns a one-time `confirmationToken` bound to the exact tool, person and words. `confirmed=true` without that token, or with a token for anything else, calls nobody and returns a fresh read-back. The same token is the idempotency key: if Alexa+ retries a confirmed call, the first result comes back and nobody is called twice.
 
-**Tools the phone agent uses** (through AgentCore Gateway): `get_call_brief`, `report_quote`, `report_booking`, `report_reply`. Each errand's brief tells the agent which job it's doing: `inquiry`, `booking` or `message`.
+### Calling law as code
 
-Rules from Functional Requirements §13 that every tool follows:
-- Every listed tool works; there are no placeholders.
-- Every input has a valid JSON Schema, and the server validates arguments before acting.
-- Failures return `isError: true` or a JSON-RPC error.
-- Each tool maps to one intent, and its description makes no overclaims.
-- Parameter descriptions include synonyms ("hair salon, barber, haircut"; "OB-GYN, gynecologist, women's health").
-- Every call and response is logged.
-- The schema has no fields unrelated to the stated purpose (Policy §3).
+- Consent is a dated record (when, how, exact wording). No record → no call.
+- Every call opens: "Hi {name}, this is CallAssist, an AI assistant calling for {user}, on behalf of Mobil80. You can say stop at any time." It ends with the callback number.
+- "Stop" or "don't call me" opts the person out forever, with a timestamp (internal do-not-call list).
+- Calls happen only 8 AM to 9 PM in the **called person's** time zone; outside that, the call is scheduled and the user is told.
+- Rolling 24-hour caps per person and overall. Calls are not recorded.
+- Tasks about children are declined (Policy §4). Emergencies are sent to 911 (Policy §13).
 
 ## 4. Voice and screen
 
@@ -129,10 +128,11 @@ Rules that follow from this:
 
 ## 7. Demo story
 
-Booking a sick child's pediatrician visit means passing a child's name and symptoms to a clinic. That collides with Policy §4 ("must never target children or collect their data"). So the demo uses two adult scenes:
+The user is Maya, who runs a small office and a busy home. Three scenes, all adults, all volunteers who agreed in writing:
 
-1. **Appointments (lead):** Maya books **her own OB/GYN new-patient visit**. The 2025 national average wait for OB/GYN is 42 days, the longest of any specialty. CallAssist calls three offices and finds an opening this week.
-2. **Message:** "Tell Grandma I'll pick her up at 5, and ask if she needs anything from the store." CallAssist calls Grandma's landline and brings back "milk and bread." This shows CallAssist reaching people who don't use apps.
+1. **Errand:** "Alexa, get me a coffee." CallAssist reads back, Maya says yes, Raju in the pantry answers his phone and says "ten minutes". Alexa tells Maya.
+2. **Task with a question:** "Ask Raju to set up the meeting room for the client at 3." Raju asks "Which room?" Alexa asks Maya; she says "Tell him room 3." CallAssist calls Raju back. After 3 PM it follows up by itself and reports "done".
+3. **Message:** "Tell Grandma I'll pick her up at 5, and ask if she needs anything from the store." CallAssist calls Grandma's landline and brings back "milk and bread". This shows CallAssist reaching people who don't use apps.
 
 ## 8. Listing assets to include in the repo
 

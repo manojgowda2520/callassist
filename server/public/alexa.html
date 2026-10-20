@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alexa+ Emulator · CallAssist</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1050px) { main { grid-template-columns: 1fr; } }
+
+  .device { background: #0b0c0f; border-radius: 28px; padding: 18px 18px 0; box-shadow: 0 20px 60px rgba(0,0,0,.25), inset 0 0 0 1px #23262d; }
+  .screen { position: relative; background: radial-gradient(1200px 500px at 20% 0%, #13213a 0%, #0a0d14 55%); border-radius: 14px; aspect-ratio: 16 / 10; overflow: hidden; color: #eef3fb; display: flex; flex-direction: column; }
+  .srow { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px 0; font-size: 14px; color: #9fb0c8; }
+  .srow .addon { display: inline-flex; align-items: center; gap: 8px; background: #ffffff12; border: 1px solid #ffffff1c; padding: 4px 12px; border-radius: 999px; color: #dfe9f7; }
+  .srow .addon i { width: 8px; height: 8px; border-radius: 50%; background: #2ed47a; display: inline-block; }
+  .notif-dot { width: 12px; height: 12px; border-radius: 50%; background: transparent; transition: .3s; }
+  .notif-dot.on { background: #ffcf33; box-shadow: 0 0 14px #ffcf33; }
+  .stage { flex: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; padding: 18px 26px 22px; min-height: 0; }
+  @media (max-width: 760px) { .stage { grid-template-columns: 1fr; overflow: auto; } }
+  .said { font-size: 15px; color: #8fa3bf; font-style: italic; min-height: 22px; }
+  .reply { font-size: clamp(20px, 2.3vw, 30px); line-height: 1.3; font-weight: 600; margin-top: 10px; letter-spacing: -0.2px; }
+  .reply.error { color: #ffb4ad; }
+  .hint { margin-top: 18px; color: #6f83a0; font-size: 14px; }
+  .cardslot { min-height: 0; overflow: auto; }
+  .acard { background: #ffffff0f; border: 1px solid #ffffff1f; border-radius: 16px; padding: 16px 18px; backdrop-filter: blur(4px); }
+  .acard h4 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: #8fb4e8; font-weight: 700; }
+  .acard .row { display: flex; gap: 10px; font-size: 15px; padding: 5px 0; }
+  .acard .row b { color: #9fb0c8; font-weight: 500; min-width: 84px; }
+  .acard .person { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #0b0c0f; background: linear-gradient(135deg, #7fd8ff, #b7a6ff); flex: none; }
+  .acard .title { font-size: 18px; font-weight: 650; }
+  .acard .sub { color: #9fb0c8; font-size: 14px; }
+  .acard .btns { display: flex; gap: 10px; margin-top: 14px; }
+  .acard .btns button { flex: 1; padding: 11px; border-radius: 12px; border: 0; font-weight: 700; font-size: 16px; }
+  .acard .yes { background: #1ec8f0; color: #04202a; }
+  .acard .no { background: #ffffff1c; color: #fff; }
+  .acard .item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #ffffff14; font-size: 15px; }
+  .acard .item:first-of-type { border-top: 0; }
+  .acard .item .grow { flex: 1; min-width: 0; }
+  .acard .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acard .updates { margin-top: 10px; font-size: 13px; color: #a9b8cc; max-height: 120px; overflow: auto; }
+  .acard .updates div { padding: 3px 0; }
+  .dark-badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .dark-badge.blue { background: #2f6fe433; color: #9cc0ff; }
+  .dark-badge.green { background: #15a46a33; color: #7ee2b5; }
+  .dark-badge.amber { background: #d98a0633; color: #ffd27a; }
+  .dark-badge.teal { background: #0f9fa333; color: #7fe3e5; }
+  .dark-badge.red { background: #d8433b33; color: #ffaaa4; }
+  .dark-badge.gray { background: #ffffff1a; color: #c9d2de; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips span { background: #ffffff14; border: 1px solid #ffffff1f; padding: 6px 12px; border-radius: 999px; font-size: 14px; }
+
+  .lightbar { height: 10px; margin: 12px -18px 0; border-radius: 0 0 28px 28px; background: #0b0c0f; position: relative; overflow: hidden; }
+  .lightbar::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 0; height: 5px; transform: translateX(-50%); border-radius: 6px; transition: width .35s, background .35s, box-shadow .35s; }
+  .lightbar.listening::after { width: 70%; background: #1ec8f0; box-shadow: 0 0 18px #1ec8f0; animation: pulse 1.1s infinite; }
+  .lightbar.thinking::after { width: 40%; background: linear-gradient(90deg, #0a7cff, #1ec8f0, #0a7cff); background-size: 200% 100%; animation: slide 1s linear infinite; box-shadow: 0 0 14px #0a7cff; }
+  .lightbar.speaking::after { width: 90%; background: linear-gradient(90deg, #1ec8f0, #0a7cff, #1ec8f0); background-size: 200% 100%; animation: slide 1.4s linear infinite; box-shadow: 0 0 18px #1ec8f0; }
+  .lightbar.notify::after { width: 90%; background: #ffcf33; box-shadow: 0 0 18px #ffcf33; animation: pulse .9s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  @keyframes slide { to { background-position: -200% 0; } }
+
+  .controls { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+  .mic { width: 58px; height: 58px; border-radius: 50%; border: 0; background: linear-gradient(135deg, #1ec8f0, #0a7cff); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 18px #0a7cff55; flex: none; }
+  .mic.on { animation: pulse 1s infinite; }
+  .mic svg { width: 26px; height: 26px; }
+  .controls form { flex: 1; display: flex; gap: 8px; }
+  .controls input { flex: 1; min-width: 0; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); font-size: 16px; background: #fff; }
+  .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .suggest button { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; font-size: 13.5px; color: var(--ink-2); }
+  .suggest button:hover { border-color: var(--brand); color: var(--brand); }
+
+  aside { display: flex; flex-direction: column; min-height: 0; }
+  .tabs { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 8px; border-radius: 8px; font-weight: 600; color: var(--ink-2); font-size: 14px; }
+  .tabs button.active { background: #eef3ff; color: var(--brand); }
+  .pane { display: none; overflow: auto; max-height: calc(100vh - 160px); min-height: 400px; }
+  .pane.active { display: block; }
+  .feed .n { padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .feed .n time { display: block; font-size: 12px; color: var(--ink-3); margin-bottom: 3px; }
+  .tlist .t { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .tlist .t .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .tlist .t .who { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+  .traffic .m { padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
+  .traffic .m.req { background: #f6f9ff; }
+  .traffic .m .h { font-weight: 700; font-family: -apple-system, sans-serif; font-size: 12px; margin-bottom: 4px; }
+  .traffic .m.req .h { color: var(--brand); }
+  .traffic .m.res .h { color: var(--green); }
+  .proto { padding: 10px 16px; font-size: 13px; color: var(--ink-2); border-bottom: 1px solid var(--line); background: #fafbfc; }
+
+  .wake { position: fixed; inset: 0; background: rgba(8,10,14,.82); display: grid; place-items: center; z-index: 50; color: #fff; text-align: center; }
+  .wake button { margin-top: 18px; padding: 14px 28px; border-radius: 999px; border: 0; background: linear-gradient(135deg, #1ec8f0, #0a7cff); color: #fff; font-weight: 700; font-size: 17px; }
+  .wake p { color: #b6c2d3; max-width: 440px; margin: 10px auto 0; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <nav>
+    <a href="/alexa" class="active">Alexa+ emulator</a>
+    <a href="/phones" target="_blank">Team phones</a>
+    <a href="/console" target="_blank">Call console</a>
+    <a href="/">About</a>
+  </nav>
+  <span class="spacer"></span>
+  <span class="pill live" id="conn">MCP connected</span>
+</header>
+
+<main>
+  <section>
+    <div class="device">
+      <div class="screen">
+        <div class="srow">
+          <span id="clock"></span>
+          <span class="addon"><i></i>CallAssist add-on</span>
+          <span class="notif-dot" id="notifDot" title="New update"></span>
+        </div>
+        <div class="stage">
+          <div>
+            <div class="said" id="said"></div>
+            <div class="reply" id="reply">Hi Manoj. What can I take care of?</div>
+            <div class="hint" id="hint">Try “Alexa, get me a coffee” or “Ask Raju to set up the meeting room by 3”.</div>
+          </div>
+          <div class="cardslot" id="card"></div>
+        </div>
+      </div>
+      <div class="lightbar" id="light"></div>
+    </div>
+
+    <div class="controls">
+      <button class="mic" id="mic" title="Talk to Alexa (hold space)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+      </button>
+      <form id="form">
+        <input id="input" autocomplete="off" placeholder="Type what you'd say to Alexa…" aria-label="Say to Alexa">
+        <button class="btn primary">Say</button>
+      </form>
+    </div>
+    <div class="suggest" id="suggest"></div>
+  </section>
+
+  <aside class="card">
+    <div class="tabs">
+      <button data-pane="updates" class="active">Updates</button>
+      <button data-pane="tasks">Tasks</button>
+      <button data-pane="traffic">MCP traffic</button>
+    </div>
+    <div class="pane feed active" id="updates"><div class="empty">Updates from your team show up here.</div></div>
+    <div class="pane tlist" id="tasks"><div class="empty">No tasks yet.</div></div>
+    <div class="pane traffic" id="traffic"><div class="proto" id="proto">Connecting…</div></div>
+  </aside>
+</main>
+
+<div class="wake" id="wake">
+  <div>
+    <h2 style="margin:0">Alexa+ emulator</h2>
+    <p>A local stand-in for an Echo Show with the CallAssist add-on. It talks to the CallAssist MCP server the same way Alexa+ does.</p>
+    <button id="wakeBtn">Tap to start</button>
+  </div>
+</div>
+
+<script type="module">
+import { api, stream, AudioQueue, Ringtone, Listener, el, timeAgo, STATUS } from "/static/common.js";
+
+const $ = (id) => document.getElementById(id);
+const sessionId = (() => { try { return sessionStorage.ca_sid ||= crypto.randomUUID(); } catch { return crypto.randomUUID(); } })();
+const voice = new AudioQueue({ voiceName: "Flo", rate: 1.05 });
+const tones = new Ringtone();
+let micMode = false;
+let expectsReply = false;
+
+const SUGGEST = [
+  "Get me a coffee",
+  "Ask Raju to set up the meeting room by 3 pm",
+  "Tell Grandma I'll pick her up at 5 and ask if she needs anything from the store",
+  "Have Lakshmi make dinner for 4 people tonight",
+  "What's pending?",
+  "Any update?",
+  "Follow up with Raju",
+  "Who's on my team?",
+];
+for (const s of SUGGEST) $("suggest").append(el("button", { onclick: () => say(s) }, s));
+
+setInterval(() => ($("clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })), 1000);
+
+function light(state) { $("light").className = "lightbar " + (state || ""); }
+voice.onStart = () => light("speaking");
+voice.onIdle = () => {
+  light("");
+  if (micMode && expectsReply && listener.supported) setTimeout(() => listener.start(), 250);
+};
+
+const listener = new Listener((text) => { micMode = true; say(text); }, (state, extra) => {
+  if (state === "listening") { light("listening"); $("mic").classList.add("on"); $("said").textContent = "Listening…"; }
+  if (state === "interim") $("said").textContent = `“${extra}”`;
+  if (state === "idle" || state === "error") { $("mic").classList.remove("on"); if ($("light").className.includes("listening")) light(""); }
+});
+$("mic").onclick = () => {
+  tones.unlock();
+  if (!listener.supported) { $("input").focus(); $("hint").textContent = "This browser has no speech recognition here, so type instead."; return; }
+  voice.clear();
+  listener.start();
+};
+document.addEventListener("keydown", (e) => { if (e.code === "Space" && document.activeElement !== $("input") && !e.repeat) { e.preventDefault(); $("mic").click(); } });
+
+$("form").onsubmit = (e) => { e.preventDefault(); const t = $("input").value.trim(); if (t) { micMode = false; say(t); $("input").value = ""; } };
+$("wakeBtn").onclick = () => { tones.unlock(); $("wake").remove(); voice.push("Hi Manoj. What can I take care of?", "/tts?voice=alexa&text=" + encodeURIComponent("Hi Manoj. What can I take care of?")); };
+
+async function say(text) {
+  $("said").textContent = `“${text}”`;
+  $("hint").textContent = "";
+  light("thinking");
+  voice.clear();
+  try {
+    const turn = await api("/api/alexa/say", { sessionId, text });
+    expectsReply = turn.expectsReply;
+    const err = turn.tools?.[0]?.isError;
+    $("reply").textContent = turn.speech;
+    $("reply").classList.toggle("error", !!err);
+    renderCard(turn.card);
+    voice.push(turn.speech, turn.audio);
+  } catch (e) {
+    $("reply").textContent = "Sorry, I couldn't reach CallAssist.";
+    light("");
+  }
+}
+
+const badge = (status) => { const s = STATUS[status] || { label: status, tone: "gray" }; return el("span", { class: `dark-badge ${s.tone}` }, s.label); };
+const initials = (n) => (n || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+async function startLink() {
+  const r = await api("/api/alexa/link", {});
+  if (r.url) location.href = r.url;
+}
+function linkCard() {
+  return el("div", { class: "acard" },
+    el("h4", {}, "Account linking"),
+    el("div", { class: "title" }, "Link CallAssist"),
+    el("div", { class: "sub", style: "margin-top:6px" }, "Like enabling a skill in the Alexa app: you approve CallAssist once, and Alexa gets a token to act for you."),
+    el("div", { class: "btns" }, el("button", { class: "yes", onclick: startLink }, "Link account")));
+}
+function renderCard(c) {
+  const slot = $("card");
+  slot.innerHTML = "";
+  if (!c) return;
+  if (c.reason === "link_required") { slot.append(linkCard()); return; }
+  if (c.needsConfirmation) {
+    const rows = [["Who", c.person && `${c.person}${c.personRole ? ` · ${c.personRole}` : ""}`], ["Task", c.task || c.errand || c.title], ["When", c.due], ["Message", c.message], ["Ask", c.question]].filter(([, v]) => v);
+    slot.append(el("div", { class: "acard" },
+      el("h4", {}, c.tool === "cancel_task" ? "Cancel this?" : "Confirm call"),
+      ...rows.map(([k, v]) => el("div", { class: "row" }, el("b", {}, k), el("span", {}, v))),
+      el("div", { class: "btns" }, el("button", { class: "yes", onclick: () => say("Yes") }, "Yes"), el("button", { class: "no", onclick: () => say("No") }, "No")),
+    ));
+    return;
+  }
+  if (c.taskId) { slot.append(taskCard(c)); return; }
+  if (Array.isArray(c.tasks)) {
+    slot.append(el("div", { class: "acard" }, el("h4", {}, c.tasks.length ? "Your tasks" : "All clear"),
+      ...(c.tasks.length ? c.tasks.slice(0, 6).map((t) => el("div", { class: "item" }, el("div", { class: "avatar", style: "width:32px;height:32px;font-size:13px" }, initials(t.person)), el("div", { class: "grow" }, el("div", { class: "t" }, t.title), el("div", { class: "sub" }, t.person + (t.eta && t.status === "accepted" ? ` · ${t.eta}` : ""))), badge(t.status))) : [el("div", { class: "sub" }, "Nothing pending.")])));
+    return;
+  }
+  if (Array.isArray(c.contacts) && c.contacts.length) {
+    slot.append(el("div", { class: "acard" }, el("h4", {}, "Your team"), el("div", { class: "chips" }, ...c.contacts.map((p) => el("span", { style: p.canCall === false ? "opacity:.45;text-decoration:line-through" : "" }, `${p.name} · ${p.role}`)))));
+    return;
+  }
+  if (Array.isArray(c.errands)) {
+    slot.append(el("div", { class: "acard" }, el("h4", {}, "Errands I can run"), ...c.errands.map((e) => el("div", { class: "item" }, el("div", { class: "grow" }, el("div", { class: "t" }, e.name), el("div", { class: "sub" }, `${e.person} · ${e.place}`))))));
+  }
+}
+
+function taskCard(t) {
+  return el("div", { class: "acard" },
+    el("div", { class: "person" }, el("div", { class: "avatar" }, initials(t.person)), el("div", { style: "flex:1;min-width:0" }, el("div", { class: "title" }, t.title), el("div", { class: "sub" }, t.person + (t.eta ? ` · ${t.eta}` : t.due ? ` · needed ${t.due}` : ""))), badge(t.status)),
+    t.reply ? el("div", { class: "row" }, el("b", {}, "They said"), el("span", {}, `“${t.reply}”`)) : null,
+    t.updates?.length ? el("div", { class: "updates" }, ...t.updates.slice(-4).map((u) => el("div", {}, `${u.from === "worker" ? t.person : u.from === "assistant" ? "CallAssist" : u.from === "user" ? "You" : "•"}: ${u.text}`))) : null,
+  );
+}
+
+// ---- live updates (Alexa+ notifications) and tasks
+const tasks = new Map();
+function renderTasks() {
+  const list = [...tasks.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).filter((t) => !/ called$/.test(t.title));
+  $("tasks").innerHTML = "";
+  if (!list.length) return $("tasks").append(el("div", { class: "empty" }, "No tasks yet."));
+  for (const t of list) {
+    const s = STATUS[t.status] || { label: t.status, tone: "gray" };
+    $("tasks").append(el("div", { class: "t" }, el("div", { class: "top" }, el("strong", {}, t.title), el("span", { class: `badge ${s.tone}` }, s.label)), el("div", { class: "who" }, `${t.person}${t.eta ? " · " + t.eta : ""}${t.onCall ? " · on the phone now" : ""}`)));
+  }
+}
+function addUpdate(n, speak) {
+  const feed = $("updates");
+  feed.querySelector(".empty")?.remove();
+  feed.prepend(el("div", { class: "n" }, el("time", {}, timeAgo(n.at)), n.text));
+  if (speak) {
+    $("notifDot").classList.add("on");
+    light("notify");
+    tones.chime();
+    const line = `Update from CallAssist. ${n.text}`;
+    setTimeout(() => voice.push(line, "/tts?voice=alexa&text=" + encodeURIComponent(line)), 700);
+    setTimeout(() => $("notifDot").classList.remove("on"), 8000);
+  }
+}
+const state = await api("/api/state");
+state.tasks.forEach((t) => tasks.set(t.taskId, t));
+renderTasks();
+state.notifications.slice().reverse().forEach((n) => addUpdate(n, false));
+stream("/api/events", {
+  task: (t) => { tasks.set(t.taskId, t); renderTasks(); },
+  notification: (n) => addUpdate(n, true),
+  status: (ok) => { $("conn").textContent = ok ? "MCP connected" : "Reconnecting…"; $("conn").classList.toggle("live", ok); },
+});
+
+// ---- MCP traffic (what Alexa+ and CallAssist actually send each other)
+api("/api/alexa/info").then((i) => {
+  $("proto").innerHTML = `Protocol <b>${i.protocolVersion}</b> (Alexa+ client) · OAuth <b>${i.authRequired ? (i.linked ? "linked (user token)" : "service token only") : "off"}</b> · ${i.tools.length} tools: <span class="mono">${i.tools.map((t) => t.name).join(", ")}</span>`;
+  const params = new URLSearchParams(location.search);
+  if (i.authRequired && !i.linked) {
+    $("reply").textContent = "Link CallAssist to get started.";
+    $("hint").textContent = params.get("link_error") ? `Linking didn't finish (${params.get("link_error")}). Try again.` : "";
+    renderCard({ reason: "link_required" });
+  } else if (params.get("linked")) {
+    $("reply").textContent = "CallAssist is linked. What can I take care of?";
+    history.replaceState(null, "", "/alexa");
+  }
+}).catch(() => ($("proto").textContent = "MCP not reachable"));
+stream("/api/alexa/traffic", {
+  traffic: (t) => {
+    const body = t.body;
+    const label = t.direction === "request" ? `→ ${body.method || "request"}${body.params?.name ? ` · ${body.params.name}` : ""}` : `← ${body.error ? "error" : "result"}${body.id !== undefined ? ` #${body.id}` : ""}`;
+    const pretty = JSON.stringify(t.direction === "request" ? (body.params ?? body) : (body.result?.structuredContent ?? body.result ?? body.error ?? body), null, 2);
+    const node = el("div", { class: `m ${t.direction === "request" ? "req" : "res"}` }, el("div", { class: "h" }, label), pretty.length > 1600 ? pretty.slice(0, 1600) + "\n…" : pretty);
+    const pane = $("traffic");
+    pane.insertBefore(node, $("proto").nextSibling);
+    while (pane.children.length > 120) pane.lastChild.remove();
+  },
+});
+
+document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.id === b.dataset.pane));
+}));
+</script>
+</body>
+</html>

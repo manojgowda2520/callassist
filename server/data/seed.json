@@ -1,0 +1,179 @@
+{
+  "user": {
+    "name": "Manoj",
+    "email": "manoj@mobil80.com"
+  },
+  "contacts": [
+    {
+      "id": "c_raju",
+      "name": "Raju",
+      "label": "office pantry",
+      "aliases": [
+        "pantry",
+        "office boy",
+        "tea boy",
+        "canteen"
+      ],
+      "phone": "+15550100001",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
+      "id": "c_lakshmi",
+      "name": "Lakshmi",
+      "label": "home help",
+      "aliases": [
+        "home",
+        "maid",
+        "cook",
+        "kitchen"
+      ],
+      "phone": "+15550100002",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
+      "id": "c_grandma",
+      "name": "Grandma",
+      "label": "family",
+      "aliases": [
+        "granny",
+        "nani",
+        "paati"
+      ],
+      "phone": "+15550100003",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
+      "id": "c_ravi",
+      "name": "Ravi",
+      "label": "office driver",
+      "aliases": [
+        "driver",
+        "cab"
+      ],
+      "phone": "+15550100004",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
+      "id": "c_ravi_k",
+      "name": "Ravi Kumar",
+      "label": "colleague",
+      "aliases": [],
+      "phone": "+15550100005",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
+      "id": "c_stranger",
+      "name": "Suresh",
+      "label": "neighbour",
+      "aliases": [],
+      "phone": "+15550100006",
+      "consent": false,
+      "optedOut": false
+    }
+  ],
+  "errands": [
+    {
+      "id": "e_coffee_office",
+      "name": "Coffee at the office",
+      "triggers": [
+        "coffee",
+        "cappuccino",
+        "latte",
+        "filter coffee"
+      ],
+      "place": "office",
+      "contactId": "c_raju",
+      "message": "Please bring one coffee to {user}'s desk.",
+      "question": "How long will it take?"
+    },
+    {
+      "id": "e_tea_office",
+      "name": "Tea at the office",
+      "triggers": [
+        "tea",
+        "chai",
+        "green tea"
+      ],
+      "place": "office",
+      "contactId": "c_raju",
+      "message": "Please bring one tea to {user}'s desk.",
+      "question": "How long will it take?"
+    },
+    {
+      "id": "e_coffee_home",
+      "name": "Coffee at home",
+      "triggers": [
+        "coffee",
+        "cappuccino",
+        "filter coffee"
+      ],
+      "place": "home",
+      "contactId": "c_lakshmi",
+      "message": "Please make one coffee for {user}.",
+      "question": "How long will it take?"
+    },
+    {
+      "id": "e_lunch_office",
+      "name": "Lunch at the office",
+      "triggers": [
+        "lunch",
+        "meal",
+        "food"
+      ],
+      "place": "office",
+      "contactId": "c_raju",
+      "message": "Please bring {user}'s lunch to the desk.",
+      "question": "What is on the menu today?"
+    },
+    {
+      "id": "e_cab_office",
+      "name": "Car to the front gate",
+      "triggers": [
+        "cab",
+        "car",
+        "ride",
+        "taxi",
+        "pickup"
+      ],
+      "place": "office",
+      "contactId": "c_ravi",
+      "message": "Please bring the car to the front gate for {user}.",
+      "question": "How many minutes until you are there?"
+    }
+  ],
+  "defaultPlace": "office",
+  "business": {
+    "name": "Mobil80",
+    "callback": "+1 555 010 0000"
+  }
+}

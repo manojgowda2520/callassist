@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · CallAssist</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  article { max-width: 760px; margin: 0 auto; padding: 32px 20px 60px; line-height: 1.6; color: var(--ink-2); }
+  h1 { color: var(--ink); margin: 0 0 4px; }
+  h2 { color: var(--ink); font-size: 18px; margin: 28px 0 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); }
+  .note { background: #fff8e6; border: 1px solid #f3dfae; border-radius: 10px; padding: 10px 14px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist</div>
+  <nav><a href="/">About</a><a href="/privacy" class="active">Privacy</a><a href="/terms">Terms</a></nav>
+</header>
+<article>
+  <h1>Privacy policy</h1>
+  <p class="muted">CallAssist, operated by Mobil80. Last updated 21 October 2026. Hackathon preview.</p>
+
+  <p>CallAssist is an Alexa+ add-on that phones the people you choose, on your behalf, to hand over tasks and messages and bring back their answers. This page says what we collect, why, and how long we keep it.</p>
+
+  <h2>When you first use CallAssist</h2>
+  <p>Alexa asks you once to link CallAssist. Linking lets Alexa give tasks to people on your CallAssist team, read the status of your tasks, and cancel tasks you started. You can unlink at any time in the Alexa app.</p>
+
+  <h2>What we collect</h2>
+  <table>
+    <tr><th>Data</th><th>Why</th></tr>
+    <tr><td>Your name and email</td><td>To say who a call is for, and to email you a summary of each task.</td></tr>
+    <tr><td>Your team: each person's name, role and phone number</td><td>To call the right person. You add them yourself; we never read your Alexa contacts.</td></tr>
+    <tr><td>Each person's consent record (when, how, and the words they agreed to)</td><td>US law requires prior consent for AI-voice calls. We call nobody without it.</td></tr>
+    <tr><td>Task and message text you dictate, and the answers people give</td><td>To deliver the task and tell you the result.</td></tr>
+    <tr><td>Call details: time, length, outcome, a short text transcript</td><td>To show you what happened and to follow up.</td></tr>
+  </table>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>We don't record calls as audio.</li>
+    <li>We don't take tasks about children, and we don't collect children's data.</li>
+    <li>We don't sell or share your data, and we don't use it for advertising.</li>
+    <li>We don't put what people said into our logs. Logs keep only the shape of a request (for example "a 40-character task").</li>
+    <li>We don't make sales or marketing calls.</li>
+  </ul>
+
+  <h2>How long we keep it</h2>
+  <p>Finished tasks, their calls and transcripts are deleted automatically <b>30 days</b> after they close. Opt-out records ("don't call me again") are kept as long as required by law, so we never call that person again.</p>
+
+  <h2>People we call</h2>
+  <p>Every call starts by saying it is an AI assistant, who it is calling for, and that you can say "stop" at any time. Saying "stop" or "don't call me again" ends the call and adds the number to our do-not-call list straight away. Calls happen only between 8 AM and 9 PM in the called person's time zone.</p>
+
+  <h2>Health and emergencies</h2>
+  <p class="note">CallAssist is not medical advice and can't help in an emergency. For an emergency, call 911.</p>
+
+  <h2>Security</h2>
+  <p>Access needs a signed, short-lived token from account linking. Each account's data is kept apart from every other account. Data is encrypted in transit, and on AWS at rest.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or deletion requests: privacy@mobil80.com. To reach CallAssist by phone: +1 555 010 0000.</p>
+</article>
+</body>
+</html>

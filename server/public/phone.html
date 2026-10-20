@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone · CallAssist</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  body.embed { background: transparent; }
+  body.embed .topbar { display: none; }
+  .wrap { display: grid; place-items: center; padding: 24px 16px; }
+  body.embed .wrap { padding: 6px; }
+  .phone { width: 340px; max-width: 100%; height: 680px; background: #0b0c0f; border-radius: 46px; padding: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.28), inset 0 0 0 2px #2a2e36; position: relative; }
+  body.embed .phone { height: 600px; width: 300px; border-radius: 40px; }
+  .scr { height: 100%; border-radius: 36px; overflow: hidden; position: relative; color: #fff; display: flex; flex-direction: column; background: linear-gradient(160deg, #23324d, #0e1420 60%); }
+  .notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 110px; height: 28px; background: #000; border-radius: 20px; z-index: 3; }
+  .sbar { display: flex; justify-content: space-between; padding: 14px 26px 0; font-size: 13px; font-weight: 600; }
+  .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  .view.on { display: flex; }
+
+  /* idle */
+  .idle-time { text-align: center; font-size: 64px; font-weight: 300; margin-top: 46px; letter-spacing: -1px; }
+  .idle-date { text-align: center; color: #b8c4d8; margin-top: 2px; }
+  .idle-who { margin: 34px 22px 0; background: #ffffff12; border: 1px solid #ffffff1c; border-radius: 18px; padding: 14px 16px; }
+  .idle-who b { display: block; font-size: 17px; }
+  .idle-who span { color: #b8c4d8; font-size: 13px; }
+  .tasks-mini { margin: 12px 22px 0; font-size: 13px; color: #cfd8e6; overflow: auto; max-height: 160px; }
+  .tasks-mini div { background: #ffffff0d; border-radius: 12px; padding: 9px 12px; margin-bottom: 6px; }
+  .idle-actions { margin-top: auto; padding: 0 22px 34px; }
+  .dial { width: 100%; padding: 14px; border-radius: 16px; border: 0; background: #2ed47a; color: #05210f; font-weight: 700; font-size: 16px; }
+
+  /* incoming */
+  .inc-top { text-align: center; margin-top: 70px; }
+  .inc-top .who { font-size: 30px; font-weight: 600; }
+  .inc-top .what { color: #b8c4d8; margin-top: 6px; }
+  .inc-top .num { color: #8ea0bb; font-size: 13px; margin-top: 4px; }
+  .ava-big { width: 96px; height: 96px; border-radius: 50%; margin: 0 auto 18px; display: grid; place-items: center; background: conic-gradient(from 200deg, #1ec8f0, #0a7cff, #1ec8f0); font-size: 34px; font-weight: 800; box-shadow: 0 0 0 0 #1ec8f066; animation: ring 1.4s infinite; }
+  @keyframes ring { 0% { box-shadow: 0 0 0 0 #1ec8f088; } 100% { box-shadow: 0 0 0 26px #1ec8f000; } }
+  .inc-btns { margin-top: auto; display: flex; justify-content: space-around; padding: 0 30px 50px; }
+  .rbtn { width: 70px; height: 70px; border-radius: 50%; border: 0; color: #fff; display: grid; place-items: center; }
+  .rbtn svg { width: 30px; height: 30px; }
+  .rbtn.acc { background: #2ed47a; }
+  .rbtn.dec { background: #ff4d4f; }
+  .rlabel { text-align: center; font-size: 13px; color: #cfd8e6; margin-top: 8px; }
+
+  /* in call */
+  .call-head { text-align: center; padding: 26px 16px 10px; }
+  .call-head .who { font-size: 20px; font-weight: 650; }
+  .call-head .t { color: #9fdcff; font-size: 13px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .bubbles { flex: 1; overflow: auto; padding: 6px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .b { max-width: 84%; padding: 9px 12px; border-radius: 16px; font-size: 14px; line-height: 1.35; }
+  .b.ai { background: #ffffff16; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .b.me { background: #0a7cff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .b.sys { align-self: center; background: transparent; color: #8ea0bb; font-size: 12px; padding: 2px; }
+  .b.ai.speaking { box-shadow: 0 0 0 1px #1ec8f0; }
+  .quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 4px; scrollbar-width: none; }
+  .quick button { flex: none; border: 1px solid #ffffff2a; background: #ffffff12; color: #fff; padding: 7px 11px; border-radius: 999px; font-size: 13px; }
+  .quick button:hover { background: #ffffff22; }
+  .compose { display: flex; gap: 6px; padding: 6px 12px 10px; align-items: center; }
+  .compose input { flex: 1; min-width: 0; border-radius: 999px; border: 0; padding: 10px 14px; background: #ffffff16; color: #fff; font-size: 14px; }
+  .compose input::placeholder { color: #9fb0c8; }
+  .ibtn { width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; background: #ffffff1c; color: #fff; flex: none; }
+  .ibtn.on { background: #1ec8f0; color: #04202a; animation: ring 1.2s infinite; }
+  .ibtn svg { width: 20px; height: 20px; }
+  .endrow { display: flex; justify-content: center; padding: 4px 0 22px; }
+  .endrow .rbtn { width: 58px; height: 58px; }
+  .soundbar { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; background: #ffcf33; color: #2a2000; border: 0; border-radius: 14px; padding: 10px; font-weight: 700; font-size: 13px; display: none; }
+  .soundbar.on { display: block; }
+  .caption { text-align: center; color: #9aa3b2; font-size: 13px; margin-top: 10px; }
+  body.embed .caption { display: none; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <nav><a href="/alexa">Alexa+ emulator</a><a href="/phones" class="active">Team phones</a><a href="/console">Call console</a></nav>
+</header>
+<div class="wrap">
+  <div>
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="sbar"><span id="sclock">9:41</span><span>5G ▮▮▮</span></div>
+
+        <div class="view on" id="idle">
+          <div class="idle-time" id="bigclock">9:41</div>
+          <div class="idle-date" id="date"></div>
+          <div class="idle-who"><b id="me">…</b><span id="role"></span></div>
+          <div class="tasks-mini" id="mytasks"></div>
+          <div class="idle-actions"><button class="dial" id="dial">📞 Call CallAssist with an update</button></div>
+        </div>
+
+        <div class="view" id="incoming">
+          <div class="inc-top">
+            <div class="ava-big">CA</div>
+            <div class="who">CallAssist</div>
+            <div class="what" id="incWhat">AI assistant</div>
+            <div class="num">+1 (555) 010-0000 · mobile</div>
+          </div>
+          <div class="inc-btns">
+            <div><button class="rbtn dec" id="decline" aria-label="Decline"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9Z"/></svg></button><div class="rlabel">Decline</div></div>
+            <div><button class="rbtn acc" id="accept" aria-label="Accept"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.05 15.05 0 0 1-6.59-6.59l2.2-2.21a.96.96 0 0 0 .25-1A11.36 11.36 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1Z"/></svg></button><div class="rlabel">Accept</div></div>
+          </div>
+        </div>
+
+        <div class="view" id="incall">
+          <div class="call-head"><div class="who">CallAssist</div><div class="t" id="timer">00:00</div></div>
+          <div class="bubbles" id="bubbles"></div>
+          <div class="quick" id="quick"></div>
+          <form class="compose" id="compose">
+            <button type="button" class="ibtn" id="mic" title="Speak"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>
+            <input id="text" placeholder="Say something…" autocomplete="off">
+            <button class="ibtn" title="Send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21 23 12 2 3v7l15 2-15 2v7Z"/></svg></button>
+          </form>
+          <div class="endrow"><button class="rbtn dec" id="end" aria-label="End call"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9Z"/></svg></button></div>
+        </div>
+        <button class="soundbar" id="soundbar">🔈 Tap to turn on sound</button>
+      </div>
+    </div>
+    <div class="caption" id="caption"></div>
+  </div>
+</div>
+
+<script type="module">
+import { api, stream, AudioQueue, Ringtone, Listener, el } from "/static/common.js";
+const $ = (id) => document.getElementById(id);
+const contactId = location.pathname.split("/").pop();
+if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+
+const voice = new AudioQueue({ voiceName: "Samantha" });
+const ring = new Ringtone();
+let me = null, user = "your boss", callId = null, purpose = null, startedAt = 0, handsFree = false, endTimer = null;
+
+const show = (v) => ["idle", "incoming", "incall"].forEach((id) => $(id).classList.toggle("on", id === v));
+const tick = () => {
+  const now = new Date();
+  const hm = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M/, "");
+  $("sclock").textContent = hm; $("bigclock").textContent = hm;
+  $("date").textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  if (startedAt) { const s = Math.floor((Date.now() - startedAt) / 1000); $("timer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
+};
+setInterval(tick, 1000); tick();
+
+// Sound needs one tap in most browsers.
+const unlock = () => { ring.unlock(); $("soundbar").classList.remove("on"); };
+document.addEventListener("pointerdown", unlock, { once: false });
+$("soundbar").onclick = unlock;
+setTimeout(() => { try { ring.unlock(); if (ring.ctx.state !== "running") $("soundbar").classList.add("on"); } catch { $("soundbar").classList.add("on"); } }, 300);
+
+function bubble(text, who) {
+  const b = el("div", { class: `b ${who}` }, text);
+  $("bubbles").append(b);
+  $("bubbles").scrollTop = $("bubbles").scrollHeight;
+  return b;
+}
+
+const QUICK = {
+  assign: ["Yes, 10 minutes", "Okay, by 3 pm", "Sure", "Which one?", "Sorry, I can't today", "There's a problem", "Please don't call me again"],
+  follow_up: ["Done ✓", "Not yet, 10 more minutes", "Almost, 5 minutes", "There's a problem"],
+  message: ["Okay, thanks!", "Yes, milk and bread please", "No, I'm fine"],
+  inbound: ["It's done", "I'll need 15 more minutes", "We ran out of milk"],
+};
+function setQuick(kind) {
+  $("quick").innerHTML = "";
+  for (const q of QUICK[kind] || QUICK.assign) $("quick").append(el("button", { type: "button", onclick: () => send(q.replace(" ✓", "")) }, q));
+}
+
+async function send(text) {
+  if (!callId || !text.trim()) return;
+  voice.clear();
+  bubble(text, "me");
+  $("text").value = "";
+  try { await api(`/api/phone/calls/${callId}/say`, { text }); } catch {}
+}
+
+const listener = new Listener((t) => send(t), (state) => $("mic").classList.toggle("on", state === "listening" || state === "interim"));
+$("mic").onclick = () => { unlock(); if (!listener.supported) { $("text").focus(); return; } handsFree = true; voice.clear(); listener.start(); };
+voice.onIdle = () => { if (handsFree && callId && listener.supported) setTimeout(() => listener.start(), 200); };
+$("compose").onsubmit = (e) => { e.preventDefault(); send($("text").value); };
+
+$("accept").onclick = async () => {
+  unlock(); ring.stop();
+  if (!callId) return;
+  startCall("CallAssist");
+  await api(`/api/phone/calls/${callId}/answer`, {}).catch(() => {});
+};
+$("decline").onclick = async () => { ring.stop(); if (callId) await api(`/api/phone/calls/${callId}/reject`, {}).catch(() => {}); endCall("Declined"); };
+$("end").onclick = async () => { if (callId) await api(`/api/phone/calls/${callId}/reject`, {}).catch(() => {}); endCall("You ended the call"); };
+$("dial").onclick = async () => {
+  unlock();
+  try {
+    const r = await api(`/api/phone/${contactId}/dial`, {});
+    callId = r.callId; purpose = "inbound";
+  } catch { return; }
+};
+
+function startCall(label) {
+  clearTimeout(endTimer);
+  $("bubbles").innerHTML = "";
+  startedAt = Date.now();
+  setQuick(purpose);
+  show("incall");
+  bubble(label === "inbound" ? "Calling CallAssist…" : "Connected", "sys");
+}
+function endCall(note) {
+  ring.stop();
+  listener.stop();
+  handsFree = false;
+  if ($("incall").classList.contains("on")) bubble(note || "Call ended", "sys");
+  callId = null; startedAt = 0;
+  endTimer = setTimeout(() => { if (!callId) show("idle"); refreshTasks(); }, voice.busy ? 4000 : 1800);
+}
+
+async function refreshTasks() {
+  const s = await api("/api/state");
+  const mine = s.tasks.filter((t) => t.person === me?.name && ["accepted", "blocked", "calling"].includes(t.status) && !/ called$/.test(t.title));
+  $("mytasks").innerHTML = "";
+  if (mine.length) $("mytasks").append(...mine.map((t) => el("div", {}, `📌 ${t.title}${t.eta ? " · " + t.eta : ""}`)));
+}
+
+stream(`/api/phone/${contactId}/events`, {
+  hello: (h) => {
+    me = h.contact; user = h.user;
+    $("me").textContent = `${me.name}'s phone`;
+    $("role").textContent = `${me.label} · ${me.phone}`;
+    $("caption").textContent = `This is ${me.name}'s phone. CallAssist calls here when ${user} needs something.`;
+    document.title = `${me.name}'s phone · CallAssist`;
+    refreshTasks();
+  },
+  signal: (s) => {
+    if (s.type === "incoming") {
+      if (callId && callId !== s.callId && $("incall").classList.contains("on")) return; // busy
+      callId = s.callId; purpose = s.purpose;
+      $("incWhat").textContent = purpose === "follow_up" ? `Checking in for ${user}` : `AI assistant for ${user}`;
+      show("incoming");
+      ring.start();
+    } else if (s.type === "outgoing_connected") {
+      callId = s.callId; purpose = "inbound";
+      startCall("inbound");
+    } else if (s.type === "say" && s.callId === callId) {
+      if (!$("incall").classList.contains("on")) startCall("CallAssist");
+      const b = bubble(s.text, "ai");
+      b.classList.add("speaking");
+      voice.push(s.text, s.audio);
+      setTimeout(() => b.classList.remove("speaking"), 2500);
+    } else if (s.type === "hangup" && s.callId === callId) {
+      endCall(s.reason === "no_answer" ? "Missed call from CallAssist" : s.reason === "cancelled" ? "CallAssist hung up" : "Call ended");
+    }
+  },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call Console · CallAssist</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  main { max-width: 1500px; margin: 0 auto; padding: 18px 20px 40px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  h2 { font-size: 15px; margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  h2 small { font-weight: 500; color: var(--ink-3); }
+  .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 12px; }
+  @media (max-width: 700px) { .board { grid-template-columns: 1fr 1fr; } }
+  .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-3); margin: 0 0 8px; display: flex; justify-content: space-between; }
+  .tcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px; margin-bottom: 8px; background: #fff; }
+  .tcard .t { font-weight: 600; font-size: 14px; }
+  .tcard .m { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; }
+  .tcard .r { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; font-style: italic; }
+  .tcard.live { border-color: var(--brand); box-shadow: 0 0 0 2px #0a7cff22; }
+  .calls .call { border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  .calls .head { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .calls .head b { font-size: 14px; }
+  .calls .lines { margin-top: 8px; font-size: 13px; display: grid; gap: 3px; }
+  .calls .lines .assistant { color: var(--ink); }
+  .calls .lines .assistant::before { content: "CallAssist: "; color: var(--brand); font-weight: 600; }
+  .calls .lines .contact::before { content: attr(data-who) ": "; color: var(--green); font-weight: 600; }
+  .calls .lines .system { color: var(--ink-3); font-style: italic; }
+  .scroll { max-height: calc(100vh - 170px); overflow: auto; }
+  .feed .n { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .feed .n time { color: var(--ink-3); font-size: 12px; display: block; }
+  .stats { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 90px; background: #f7f8fa; border-radius: 10px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { font-size: 12px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <nav><a href="/alexa" target="_blank">Alexa+ emulator</a><a href="/phones" target="_blank">Team phones</a><a href="/console" class="active">Call console</a><a href="/">About</a></nav>
+  <span class="spacer"></span><span class="pill live" id="conn">Live</span>
+</header>
+<main>
+  <section class="card">
+    <h2>Tasks <small id="count"></small></h2>
+    <div class="stats" id="stats"></div>
+    <div class="board" id="board"></div>
+  </section>
+  <section style="display:grid; gap:18px; align-content:start">
+    <div class="card">
+      <h2>Calls <small>live transcripts</small></h2>
+      <div class="calls scroll" id="calls" style="max-height:60vh"></div>
+    </div>
+    <div class="card">
+      <h2>Updates to Manoj <small>Alexa notifications</small></h2>
+      <div class="feed scroll" id="feed" style="max-height:30vh"></div>
+    </div>
+    <div class="card">
+      <h2>Emails <small>local outbox (Amazon SES on AWS)</small></h2>
+      <div class="feed scroll" id="mail" style="max-height:24vh"></div>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { api, stream, el, timeAgo, STATUS } from "/static/common.js";
+const $ = (id) => document.getElementById(id);
+const tasks = new Map(), calls = new Map();
+const COLS = [["Calling", ["calling"]], ["On it", ["accepted"]], ["Needs Manoj", ["blocked"]], ["Closed", ["done", "declined", "unreachable", "cancelled"]]];
+
+function renderBoard() {
+  const list = [...tasks.values()].filter((t) => !/ called$/.test(t.title)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  $("count").textContent = `${list.length} total`;
+  $("board").innerHTML = "";
+  for (const [name, statuses] of COLS) {
+    const items = list.filter((t) => statuses.includes(t.status));
+    $("board").append(el("div", { class: "col" }, el("h3", {}, name, el("span", {}, items.length)),
+      ...items.map((t) => { const s = STATUS[t.status]; return el("div", { class: `tcard ${t.onCall ? "live" : ""}` },
+        el("div", { class: "t" }, t.title),
+        el("div", { class: "m" }, el("span", { class: `badge ${s.tone}` }, s.label), " ", t.person, t.eta ? ` · ${t.eta}` : "", t.onCall ? " · 📞 on call" : ""),
+        t.reply ? el("div", { class: "r" }, `“${t.reply}”`) : null); }),
+      items.length ? null : el("div", { class: "empty", style: "padding:8px" }, "—")));
+  }
+  const all = list.length || 1;
+  const done = list.filter((t) => t.status === "done").length;
+  const live = [...calls.values()].filter((c) => ["ringing", "in_progress"].includes(c.status)).length;
+  $("stats").innerHTML = "";
+  for (const [v, l] of [[live, "calls live"], [list.filter((t) => ["calling", "accepted", "blocked"].includes(t.status)).length, "open tasks"], [done, "done"], [`${Math.round((done / all) * 100)}%`, "completion"]])
+    $("stats").append(el("div", { class: "stat" }, el("b", {}, v), el("span", {}, l)));
+}
+const CALLSTATUS = { ringing: ["Ringing", "blue"], in_progress: ["On the line", "green"], ended: ["Ended", "gray"], no_answer: ["No answer", "red"], rejected: ["Rejected", "red"], cancelled: ["Cancelled", "gray"], failed: ["Failed", "red"] };
+const PURPOSE = { assign: "New task", follow_up: "Follow-up", cancel_notice: "Cancellation" };
+function renderCalls() {
+  const list = [...calls.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 25);
+  $("calls").innerHTML = "";
+  if (!list.length) return $("calls").append(el("div", { class: "empty" }, "No calls yet. Ask Alexa for something."));
+  for (const c of list) {
+    const [label, tone] = CALLSTATUS[c.status] || [c.status, "gray"];
+    $("calls").append(el("div", { class: "call" },
+      el("div", { class: "head" }, el("b", {}, `${c.contactName} · ${PURPOSE[c.purpose] || c.purpose}`), el("span", {}, el("span", { class: `badge ${tone}` }, label), " ", el("span", { class: "muted", style: "font-size:12px" }, timeAgo(c.createdAt)))),
+      el("div", { class: "lines" }, ...c.transcript.map((l) => el("div", { class: l.who, "data-who": c.contactName }, l.text)))));
+  }
+}
+function addNote(n) { $("feed").querySelector(".empty")?.remove(); $("feed").prepend(el("div", { class: "n" }, el("time", {}, timeAgo(n.at)), n.text)); }
+
+const s = await api("/api/state");
+s.tasks.forEach((t) => tasks.set(t.taskId, t));
+s.calls.forEach((c) => calls.set(c.id, c));
+if (!s.notifications.length) $("feed").append(el("div", { class: "empty" }, "No updates yet."));
+s.notifications.slice().reverse().forEach(addNote);
+renderBoard(); renderCalls();
+let pending = false;
+const soon = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; renderBoard(); renderCalls(); }); };
+stream("/api/events", {
+  task: (t) => { tasks.set(t.taskId, t); soon(); },
+  call: (c) => { calls.set(c.id, c); soon(); },
+  notification: addNote,
+  status: (ok) => { $("conn").textContent = ok ? "Live" : "Reconnecting…"; $("conn").classList.toggle("live", ok); },
+});
+setInterval(soon, 15000);
+async function loadMail() {
+  const list = await api("/api/outbox").catch(() => []);
+  $("mail").innerHTML = "";
+  if (!list.length) return $("mail").append(el("div", { class: "empty" }, "No emails yet."));
+  for (const m of list) $("mail").append(el("div", { class: "n" }, el("a", { href: `/outbox/${m.file}`, target: "_blank" }, m.subject)));
+}
+loadMail();
+setInterval(loadMail, 5000);
+</script>
+</body>
+</html>

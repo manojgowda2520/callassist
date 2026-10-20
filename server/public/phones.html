@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team Phones · CallAssist</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  .intro { max-width: 1400px; margin: 18px auto 0; padding: 0 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .intro p { margin: 0; color: var(--ink-2); flex: 1; min-width: 260px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 12px 12px 30px; }
+  .slot { text-align: center; }
+  .slot iframe { width: 312px; height: 612px; border: 0; background: transparent; }
+  .slot .name { font-weight: 650; margin-top: -2px; }
+  .slot .name span { color: var(--ink-3); font-weight: 400; font-size: 13px; }
+  .slot.off { opacity: .55; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <nav><a href="/alexa" target="_blank">Alexa+ emulator</a><a href="/phones" class="active">Team phones</a><a href="/console" target="_blank">Call console</a><a href="/">About</a></nav>
+</header>
+<div class="intro">
+  <p>Each phone belongs to someone on Manoj's team. When Manoj asks Alexa for something, CallAssist rings the right phone here, speaks, and listens. Tap a phone once to turn on its sound.</p>
+  <button class="btn" id="reset" title="Clears tasks and calls">Reset demo</button>
+</div>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { api, el } from "/static/common.js";
+const s = await api("/api/state");
+const only = new URLSearchParams(location.search).get("only");
+const people = s.contacts.filter((c) => !only || only.split(",").includes(c.id));
+for (const c of people) {
+  document.getElementById("grid").append(el("div", { class: `slot ${c.consent && !c.optedOut ? "" : "off"}` },
+    el("iframe", { src: `/phone/${c.id}?embed=1`, allow: "autoplay; microphone", title: `${c.name}'s phone` }),
+    el("div", { class: "name" }, c.name, " ", el("span", {}, `· ${c.label}${c.consent ? "" : " · no consent"}`)),
+  ));
+}
+document.getElementById("reset").onclick = async () => { if (confirm("Clear all tasks and calls?")) { await api("/api/demo/reset", {}); location.reload(); } };
+</script>
+</body>
+</html>

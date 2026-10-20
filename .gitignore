@@ -11,3 +11,9 @@ coverage/
 
 # Private handoff notes (internal approval details, not for the public repo)
 handoff/
+
+# Local runtime data: secrets, state, outbox, TTS cache
+server/data/local/
+
+# Machine-specific editor/preview config
+.claude/
