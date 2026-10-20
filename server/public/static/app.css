@@ -59,6 +59,9 @@ button { font: inherit; cursor: pointer; }
 .empty { color: var(--ink-3); font-size: 14px; padding: 18px; text-align: center; }
 
 @media (max-width: 720px) {
-  .topbar { padding: 10px 14px; gap: 10px; }
-  .topbar .pill { display: none; }
+  .topbar { padding: 8px 12px; gap: 10px; }
+  .topbar .pill, .topbar .logo .muted { display: none; }
+  .topbar nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+  .topbar nav a { white-space: nowrap; padding: 6px 10px; }
 }
+html, body { overflow-x: hidden; }

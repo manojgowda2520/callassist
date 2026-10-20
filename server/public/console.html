@@ -40,7 +40,7 @@
 <header class="topbar">
   <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
   <nav><a href="/alexa" target="_blank">Alexa+ emulator</a><a href="/phones" target="_blank">Team phones</a><a href="/console" class="active">Call console</a><a href="/">About</a></nav>
-  <span class="spacer"></span><span class="pill live" id="conn">Live</span>
+  <span class="spacer"></span><span class="pill" id="rules"></span><span class="pill live" id="conn">Live</span>
 </header>
 <main>
   <section class="card">
@@ -119,6 +119,7 @@ stream("/api/events", {
   status: (ok) => { $("conn").textContent = ok ? "Live" : "Reconnecting…"; $("conn").classList.toggle("live", ok); },
 });
 setInterval(soon, 15000);
+api("/healthz").then((h) => ($("rules").textContent = `Calling hours: ${h.callingHours} · OAuth ${h.auth ? "on" : "off"}`));
 async function loadMail() {
   const list = await api("/api/outbox").catch(() => []);
   $("mail").innerHTML = "";

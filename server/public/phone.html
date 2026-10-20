@@ -10,8 +10,9 @@
   body.embed { background: transparent; }
   body.embed .topbar { display: none; }
   .wrap { display: grid; place-items: center; padding: 24px 16px; }
+  .wrap > div { max-width: 100%; }
   body.embed .wrap { padding: 6px; }
-  .phone { width: 340px; max-width: 100%; height: 680px; background: #0b0c0f; border-radius: 46px; padding: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.28), inset 0 0 0 2px #2a2e36; position: relative; }
+  .phone { width: min(340px, calc(100vw - 32px)); height: min(680px, calc((100vw - 32px) * 2)); min-height: 560px; background: #0b0c0f; border-radius: 46px; padding: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.28), inset 0 0 0 2px #2a2e36; position: relative; }
   body.embed .phone { height: 600px; width: 300px; border-radius: 40px; }
   .scr { height: 100%; border-radius: 36px; overflow: hidden; position: relative; color: #fff; display: flex; flex-direction: column; background: linear-gradient(160deg, #23324d, #0e1420 60%); }
   .notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 110px; height: 28px; background: #000; border-radius: 20px; z-index: 3; }
@@ -65,6 +66,7 @@
   .ibtn svg { width: 20px; height: 20px; }
   .endrow { display: flex; justify-content: center; padding: 4px 0 22px; }
   .endrow .rbtn { width: 58px; height: 58px; }
+  #incall.ended .quick, #incall.ended .compose { opacity: .35; pointer-events: none; }
   .soundbar { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; background: #ffcf33; color: #2a2000; border: 0; border-radius: 14px; padding: 10px; font-weight: 700; font-size: 13px; display: none; }
   .soundbar.on { display: block; }
   .caption { text-align: center; color: #9aa3b2; font-size: 13px; margin-top: 10px; }
@@ -176,7 +178,9 @@ async function send(text) {
 
 const listener = new Listener((t) => send(t), (state) => $("mic").classList.toggle("on", state === "listening" || state === "interim"));
 $("mic").onclick = () => { unlock(); if (!listener.supported) { $("text").focus(); return; } handsFree = true; voice.clear(); listener.start(); };
-voice.onIdle = () => { if (handsFree && callId && listener.supported) setTimeout(() => listener.start(), 200); };
+const highlight = (text) => document.querySelectorAll(".b.ai").forEach((b) => b.classList.toggle("speaking", text !== null && b.dataset.line === text));
+voice.onStart = (text) => highlight(text);
+voice.onIdle = () => { highlight(null); if (handsFree && callId && listener.supported) setTimeout(() => listener.start(), 200); };
 $("compose").onsubmit = (e) => { e.preventDefault(); send($("text").value); };
 
 $("accept").onclick = async () => {
@@ -197,6 +201,7 @@ $("dial").onclick = async () => {
 
 function startCall(label) {
   clearTimeout(endTimer);
+  $("incall").classList.remove("ended");
   $("bubbles").innerHTML = "";
   startedAt = Date.now();
   setQuick(purpose);
@@ -208,6 +213,7 @@ function endCall(note) {
   listener.stop();
   handsFree = false;
   if ($("incall").classList.contains("on")) bubble(note || "Call ended", "sys");
+  $("incall").classList.add("ended");
   callId = null; startedAt = 0;
   endTimer = setTimeout(() => { if (!callId) show("idle"); refreshTasks(); }, voice.busy ? 4000 : 1800);
 }
@@ -241,9 +247,8 @@ stream(`/api/phone/${contactId}/events`, {
     } else if (s.type === "say" && s.callId === callId) {
       if (!$("incall").classList.contains("on")) startCall("CallAssist");
       const b = bubble(s.text, "ai");
-      b.classList.add("speaking");
+      b.dataset.line = s.text;
       voice.push(s.text, s.audio);
-      setTimeout(() => b.classList.remove("speaking"), 2500);
     } else if (s.type === "hangup" && s.callId === callId) {
       endCall(s.reason === "no_answer" ? "Missed call from CallAssist" : s.reason === "cancelled" ? "CallAssist hung up" : "Call ended");
     }

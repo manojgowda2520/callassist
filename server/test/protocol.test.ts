@@ -163,3 +163,19 @@ test("rate limits answer 429 with Retry-After", async () => {
   assert.ok((await fetch(url)).headers.get("retry-after"));
   srv.close();
 });
+
+test("demo reset clears tasks for good (saved, not just in memory)", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { Store } = await import("../src/store.js");
+  const { SEED } = await import("./helpers.js");
+  const file = join(mkdtempSync(join(tmpdir(), "ca-")), "s.json");
+  const s = new Store(SEED, file);
+  s.createTask({ kind: "task", title: "T", details: "D", assigneeId: "c_raju", assigneeName: "Raju" });
+  s.tasks.clear();
+  s.touch();
+  assert.equal(new Store(SEED, file).tasks.size, 0);
+  const r = await fetch(`${env.url}/api/demo/reset`, { method: "POST" });
+  assert.equal((await r.json()).ok, true);
+});

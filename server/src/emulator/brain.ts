@@ -328,7 +328,7 @@ export class AlexaBrain {
       if ((m = u.match(new RegExp(`^(?:can you |could you |please )?(?:ask|tell|have|get|make|remind|need|i need|i want) (?:the )?${name} to (.+)$`)))) return assign(m[1]);
       if ((m = u.match(new RegExp(`^(?:the )?${name} (?:should|needs to|must|has to|will need to|ought to) (.+)$`)))) return assign(m[1]);
       if ((m = u.match(new RegExp(`^(?:assign|give|delegate) (.+?) to (?:the )?${name}$`)))) return assign(m[1]);
-      if ((m = u.match(new RegExp(`^(?:have|get) (?:the )?${name} (.+)$`)))) return assign(m[1]);
+      if ((m = u.match(new RegExp(`^(?:have|get|make) (?:the )?${name} (.+)$`)))) return assign(m[1]);
 
       // Messages: "tell Grandma I'll pick her up at 5 and ask if she needs anything"
       if ((m = u.match(new RegExp(`^(?:can you |please )?(?:tell|let|inform|message) (?:the )?${name}(?: know)?(?: that)? (.+?)(?:,? and ask (?:(?:him|her|them) )?(.+))?$`)))) {
@@ -352,7 +352,7 @@ export class AlexaBrain {
     if (/\b(what'?s|what is|anything) (pending|open|left|outstanding|going on)\b|\bmy (tasks|to ?do|list)\b|\bto-?do list\b|\bwhat('s| is) on (my )?(plate|list)\b/.test(u))
       return { tool: "list_tasks", args: this.withPerson({ filter: "open" }, person) };
     if (/\bwhat (got|has been|was) (done|finished|completed)\b|\bwhat('s| is) done\b/.test(u)) return { tool: "list_tasks", args: { filter: "done" } };
-    if ((m = u.match(/\bwhat (is|'s) (\w+) (doing|working on|up to)\b/))) return { tool: "list_tasks", args: this.withPerson({ filter: "open" }, person) };
+    if ((m = u.match(/\bwhat(?: is|'s) (\w+) (doing|working on|up to)\b/))) return { tool: "list_tasks", args: this.withPerson({ filter: "open" }, person) };
 
     if (/\b(any )?(update|news|status|progress)\b|\bwhat did \w+( \w+)? say\b|\bdid \w+( \w+)? (reply|answer|say|respond|pick up)\b|\bis (the |my )?.+ (coming|done|ready|on (its|the) way)\b|\bwhere('s| is) (my|the) \w+\b|\bhow('s| is) .+ going\b/.test(u))
       return { tool: "get_task_status", args: this.withPerson({}, person) };

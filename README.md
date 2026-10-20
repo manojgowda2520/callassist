@@ -71,7 +71,7 @@ cd server
 npm test
 ```
 
-95 tests run against a real server on a random port, with "worker bots" answering the local phones:
+107 tests run against a real server on a random port, with "worker bots" answering the local phones:
 
 | Suite | Covers |
 | --- | --- |
@@ -81,6 +81,7 @@ npm test
 | `flows` | Accept, decline, question then answer, problem then answer, automatic follow-up, no answer, rejected, hang-up, silence, unclear, cancel, inbound update, messages, parallel calls, Connect agent tools, email receipts, retention |
 | `emulator` | 25 natural phrasings to the right tool, full voice conversations, link-first behaviour, replies under 30 seconds with no screen references |
 | `unit` | Time parsing, what people say on the phone, wording helpers, persistence |
+| `more` | 50 phrasings across the main tools, 10 hostile callers, edge times, answers held until calling hours, follow-up limits, bursts past the call limit |
 
 ## Built with
 

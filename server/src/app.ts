@@ -175,7 +175,12 @@ export function createApp(opts: AppOptions) {
     const s = sse(res);
     const off = store.subscribe((e: StoreEvent) => {
       if (e.type === "task") s.send("task", taskView(assistant, e.task));
-      else if (e.type === "call") s.send("call", { ...e.call, phone: maskPhone(e.call.phone) });
+      else if (e.type === "call") {
+        s.send("call", { ...e.call, phone: maskPhone(e.call.phone) });
+        // The task's "on the phone" state depends on its call: refresh it too.
+        const t = store.tasks.get(e.call.taskId);
+        if (t) s.send("task", taskView(assistant, t));
+      }
       else s.send("notification", e.notification);
     });
     s.onClose(off);
@@ -300,7 +305,11 @@ export function createApp(opts: AppOptions) {
     store.tasks.clear();
     store.calls.clear();
     store.notifications.length = 0;
-    for (const c of store.contacts) c.optedOut = false;
+    for (const c of store.contacts) {
+      c.optedOut = false;
+      c.optedOutAt = undefined;
+    }
+    store.touch();
     assistant.start();
     res.json({ ok: true });
   });
@@ -315,7 +324,7 @@ export function createApp(opts: AppOptions) {
   app.get("/privacy", page("privacy.html"));
   app.get("/terms", page("terms.html"));
   app.use("/static", express.static(join(opts.publicDir, "static"), { maxAge: 0 }));
-  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length, callingHours: assistant.config.callingHours ? "8 AM-9 PM callee time" : "off (demo)", auth: !!opts.auth }));
 
   // Bad JSON and other request errors: answer cleanly instead of printing a stack.
   app.use((err: { type?: string; status?: number }, _req: Request, res: Response, _next: () => void) => {
