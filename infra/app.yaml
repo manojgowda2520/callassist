@@ -156,7 +156,7 @@ Resources:
                 Action: [secretsmanager:GetSecretValue]
                 Resource: !Ref AppSecrets
               - Effect: Allow
-                Action: [polly:SynthesizeSpeech]
+                Action: [polly:SynthesizeSpeech, transcribe:StartStreamTranscription]
                 Resource: "*"
               - !If
                 - HasConnect

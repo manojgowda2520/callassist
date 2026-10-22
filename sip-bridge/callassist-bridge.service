@@ -1,0 +1,15 @@
+[Unit]
+Description=CallAssist SIP bridge (Asterisk ARI <-> CallAssist)
+After=network-online.target asterisk.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/callassist-bridge.env
+ExecStart=/usr/bin/node /opt/callassist-bridge/bridge.mjs
+Restart=always
+RestartSec=3
+# Runs as root so it can write Asterisk's sound folder; change to the asterisk user if your folders allow it.
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

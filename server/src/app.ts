@@ -14,6 +14,8 @@ import type { AuthServer } from "./auth.js";
 import { Metrics, rateLimit } from "./ops.js";
 import type { LocalOutbox } from "./email.js";
 import type { ConnectTelephony, ConnectWebCallTelephony } from "./connect.js";
+import type { SipTelephony } from "./sip.js";
+import type { PhoneSpeech } from "./speech.js";
 import type { Tts } from "./tts.js";
 
 export interface AppOptions {
@@ -44,6 +46,10 @@ export interface AppOptions {
   connect?: ConnectTelephony;
   /** Amazon Connect browser calling (WebRTC), when configured. */
   webCalls?: ConnectWebCallTelephony;
+  /** SIP line (Asterisk + Airtel, India testing) driven by the sip-bridge program. */
+  sip?: SipTelephony;
+  /** 8 kHz speech for the SIP line (Polly out, Transcribe in). */
+  phoneSpeech?: PhoneSpeech;
   /** Local email outbox, shown on the console. */
   outbox?: LocalOutbox;
   /** Write CloudWatch EMF metric lines to the log. */
@@ -168,6 +174,43 @@ export function createApp(opts: AppOptions) {
   app.delete("/mcp", methodNotAllowed);
   app.post("/agent/mcp", hostGuard, agentAuth, (req, res) => void serveMcp(() => createAgentMcpServer(assistant), req, res));
   app.get("/agent/mcp", methodNotAllowed);
+
+  // ---------------------------------------------------------------- SIP bridge (Asterisk + Airtel)
+  // The bridge connects OUT to us; it needs the phone-agent token (agent:calls).
+  app.get("/sip/events", agentAuth, (_req, res) => {
+    if (!opts.sip) return void res.status(404).json({ error: "SIP line not configured" });
+    log({ event: "sip_bridge_connected" });
+    opts.sip.broker.attach(res);
+  });
+  app.post("/sip/turn", agentAuth, (req, res) => {
+    if (!opts.sip) return void res.status(404).json({ error: "SIP line not configured" });
+    const callId = typeof req.body?.callId === "string" ? req.body.callId : "";
+    const event = req.body?.event;
+    const text = typeof req.body?.text === "string" ? req.body.text.slice(0, 500) : "";
+    if (!callId || !["answered", "heard", "hangup"].includes(event)) return void res.status(400).json({ error: "callId and event (answered|heard|hangup) required" });
+    if (!store.calls.get(callId)) return void res.json({ say: "Sorry, this call has ended. Goodbye.", end: true });
+    res.json(opts.sip.turn(callId, event, text));
+  });
+  app.get("/sip/tts", agentAuth, async (req, res) => {
+    const text = typeof req.query.text === "string" ? req.query.text.slice(0, 1500) : "";
+    if (!opts.phoneSpeech || !text) return void res.status(404).end();
+    try {
+      res.type("audio/wav").send(await opts.phoneSpeech.wav8k(text));
+    } catch (err) {
+      log({ event: "sip_tts_error", error: String(err) });
+      res.status(502).end();
+    }
+  });
+  app.post("/sip/stt", agentAuth, express.raw({ type: () => true, limit: "3mb" }), async (req, res) => {
+    if (!opts.phoneSpeech) return void res.status(404).json({ error: "speech not configured" });
+    try {
+      const text = await opts.phoneSpeech.transcribe(Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      res.json({ text });
+    } catch (err) {
+      log({ event: "sip_stt_error", error: String(err) });
+      res.status(502).json({ text: "" });
+    }
+  });
 
   // Amazon Connect contact flow → Lambda → here, once per turn of the conversation.
   app.post("/connect/turn", agentAuth, (req, res) => {
@@ -379,7 +422,7 @@ export function createApp(opts: AppOptions) {
   app.get("/privacy", page("privacy.html"));
   app.get("/terms", page("terms.html"));
   app.use("/static", express.static(join(opts.publicDir, "static"), { maxAge: 0 }));
-  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length, callingHours: assistant.config.callingHours ? "8 AM-9 PM callee time" : "off (demo)", auth: !!opts.auth, voices: opts.tts?.available ? opts.tts.engine : "browser" }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length, callingHours: assistant.config.callingHours ? "8 AM-9 PM callee time" : "off (demo)", auth: !!opts.auth, voices: opts.tts?.available ? opts.tts.engine : "browser", sipBridges: opts.sip?.broker.connected ?? 0 }));
 
   // Bad JSON and other request errors: answer cleanly instead of printing a stack.
   app.use((err: { type?: string; status?: number }, _req: Request, res: Response, _next: () => void) => {

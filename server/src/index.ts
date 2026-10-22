@@ -11,6 +11,8 @@ import { AuthServer } from "./auth.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHmac, randomBytes } from "node:crypto";
 import { ConnectTelephony, ConnectWebCallTelephony, TelephonyRouter, awsConnectApi } from "./connect.js";
+import { SipBroker, SipTelephony } from "./sip.js";
+import { AwsPhoneSpeech } from "./speech.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.PORT ?? 8787);
@@ -37,9 +39,11 @@ const connectApi =
 // Real phone calls need a claimed number; browser calls only need the instance and flow.
 const connect = connectApi && process.env.CONNECT_SOURCE_NUMBER ? new ConnectTelephony(connectApi, log) : undefined;
 const webCalls = connectApi ? new ConnectWebCallTelephony(connectApi, phone, log) : undefined;
+// SIP line (Asterisk + Airtel) for India testing: calls wait for the sip-bridge program to connect.
+const sip = new SipTelephony(new SipBroker(), log);
 const defaultLine = process.env.CONNECT_DEFAULT_LINE ?? "local";
 const lines = new TelephonyRouter(
-  { local: phone, ...(connect ? { connect } : {}), ...(webCalls ? { "connect-web": webCalls } : {}) },
+  { local: phone, sip, ...(connect ? { connect } : {}), ...(webCalls ? { "connect-web": webCalls } : {}) },
   (call) => store.contact(call.contactId)?.line ?? defaultLine,
 );
 const assistant = new Assistant(
@@ -60,6 +64,7 @@ const assistant = new Assistant(
 // credentials; otherwise the Mac's built-in voices.
 const ttsEngine = process.env.TTS_ENGINE ?? (process.env.PUBLIC_URL?.startsWith("https://") ? "polly" : "say");
 const tts: Tts = ttsEngine === "polly" ? new PollyTts(join(root, "data/local/tts")) : new LocalTts(join(root, "data/local/tts"), process.env.FFMPEG ?? "ffmpeg");
+const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech("Matthew", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN") : undefined;
 
 // Local secrets (git-ignored). On AWS these live in Secrets Manager.
 const secretsFile = join(root, "data/local/secrets.json");
@@ -67,14 +72,15 @@ mkdirSync(join(root, "data/local"), { recursive: true });
 // On AWS, MASTER_SECRET comes from Secrets Manager and each OAuth client secret is derived from it,
 // so the Connect Lambda can derive the same phone-agent secret without another stored secret.
 const derive = (master: string, label: string) => createHmac("sha256", master).update(label).digest("base64url");
-let secrets: { jwt: string; alexa: string; agent: string };
+let secrets: { jwt: string; alexa: string; agent: string; sip?: string };
 if (process.env.MASTER_SECRET) {
   const m = process.env.MASTER_SECRET;
-  secrets = { jwt: derive(m, "jwt"), alexa: derive(m, "client:alexa-plus-emulator"), agent: derive(m, "client:connect-phone-agent") };
+  secrets = { jwt: derive(m, "jwt"), alexa: derive(m, "client:alexa-plus-emulator"), agent: derive(m, "client:connect-phone-agent"), sip: derive(m, "client:sip-bridge") };
 } else {
   secrets = existsSync(secretsFile)
     ? JSON.parse(readFileSync(secretsFile, "utf8"))
     : { jwt: randomBytes(32).toString("hex"), alexa: randomBytes(24).toString("base64url"), agent: randomBytes(24).toString("base64url") };
+  secrets.sip ??= randomBytes(24).toString("base64url");
   writeFileSync(secretsFile, JSON.stringify(secrets, null, 2), { mode: 0o600 });
 }
 
@@ -92,6 +98,7 @@ const auth = authOn
         clients: [
           { clientId: "alexa-plus-emulator", clientSecret: secrets.alexa, name: "Alexa", redirectUris: [`${origin}/alexa/callback`, `http://localhost:${PORT}/alexa/callback`, `http://127.0.0.1:${PORT}/alexa/callback`], serviceScopes: ["mcp:service"] },
           { clientId: "connect-phone-agent", clientSecret: secrets.agent, name: "Amazon Connect phone agent", redirectUris: [], serviceScopes: ["agent:calls"] },
+          { clientId: "sip-bridge", clientSecret: secrets.sip!, name: "SIP bridge (Asterisk)", redirectUris: [], serviceScopes: ["agent:calls"] },
         ],
       },
       log,
@@ -110,6 +117,8 @@ const app = createApp({
   log,
   connect,
   webCalls,
+  sip,
+  phoneSpeech,
   outbox,
   emitMetrics: process.env.EMF === "1",
   auth,
@@ -127,5 +136,5 @@ app.listen(PORT, HOST, () => {
   console.log(`  MCP endpoint     /mcp   (phone agent: /agent/mcp)`);
   console.log(`  OAuth            ${authOn ? "on (/oauth/token, /oauth/authorize)" : "OFF (AUTH=off)"}`);
   console.log(`  Voices           ${tts.engine}${tts.available ? "" : " (unavailable: browser voices)"}`);
-  console.log(`  Phone lines      local demo phones${webCalls ? " + Amazon Connect browser calls" : ""}${connect ? " + Amazon Connect phone calls" : ""} (default: ${defaultLine})`);
+  console.log(`  Phone lines      local demo phones${webCalls ? " + Amazon Connect browser calls" : ""}${connect ? " + Amazon Connect phone calls" : ""} + SIP bridge (default: ${defaultLine})`);
 });
