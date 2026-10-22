@@ -1,10 +1,68 @@
 # Friction log
 
-Entries use the format the hackathon asks for: task, steps, expected vs. actual, severity, workaround, suggestion. Newest first.
+What we tried while building CallAssist (an Alexa+ add-on, as an MCP server, that phones the user's people), what worked, what didn't, and the workarounds we used. Entries use the format the hackathon asks for: task, steps, expected vs. actual, severity, workaround, suggestion. Newest first.
 
 Severity: **Blocker** (can't proceed), **High** (big detour), **Medium** (slows down), **Low** (annoyance).
 
+## Summary
+
+| # | Product | Issue | Severity |
+| --- | --- | --- | --- |
+| 1 | Alexa+ add-ons | Tools (MCP Toolkit, web simulator) are partner-only; no way to test in real Alexa+ | High |
+| 2 | Amazon Connect | Not available on AWS India (AISPL) accounts | Blocker (for India) |
+| 3 | Connect + AgentCore Gateway | Connect's MCP client needs `2025-03-26` on the gateway; tools vanish silently otherwise | High |
+| 4 | Alexa+ docs | No guidance for read-back/"yes" when the client doesn't declare elicitation | Medium |
+| 5 | Alexa+ docs | No latency or timeout numbers for tool calls | Medium |
+| 6 | Alexa+ docs | Client protocol `2025-03-26` vs hackathon minimum `2025-11-25` | Medium |
+| 7 | AgentCore Runtime | Built-in auth style may not fit the Alexa+ OAuth checklist | Medium |
+| 8 | Alexa+ Policy | Children's-data rule gives no guidance for incidental mentions in free text | Medium |
+| 9 | Alexa+ docs | Refresh-token and 401/403 rules disagree between pages | Low |
+| 10 | Alexa+ docs | Scope rules contradict each other on the Authentication page | Low |
+| 11 | MCP TypeScript SDK (used to emulate Alexa+) | Client can't pin an older protocol version | Low |
+| 12 | Alexa+ docs | Design Guide landing page has no rules; Supported Capabilities link broken | Low |
+
+## What worked well
+
+- **The Alexa+ docs themselves.** Functional Requirements, Policy Requirements and the Authentication checklist are concrete enough to turn into tests. We wrote one test per MUST we could find (token tiers, PKCE S256, no `WWW-Authenticate`, ≤5 options, no IDs in speech, read-back before action).
+- **Self-hosted MCP + our own client is allowed.** The FAQ answer let us build a local Alexa+ emulator that is a real MCP client and negotiates `2025-03-26`, so we could test every flow end to end without partner access.
+- **MCP protocol negotiation.** The official TypeScript SDK negotiated `2025-11-25` down to `2025-03-26` with no extra code on the server.
+- **Amazon Connect's design maps cleanly to our model.** `StartOutboundVoiceContact` with contact attributes, plus an AI agent that calls MCP tools, matches our "call brief → report outcome" phone-agent tools one to one.
+- **Structured output.** Declaring an `outputSchema` per tool caught two response-shape bugs in our own tests, because the SDK client validates every result.
+
 ---
+
+## 2026-10-21 · No pattern for "read back, then wait for yes" without elicitation
+
+- **Tool:** Alexa+ docs ([Functional Requirements §8, §9](https://developer.amazon.com/docs/alexaplus/add-ons/functional-requirements.html), [Client lifecycle](https://developer.amazon.com/docs/alexaplus/add-ons/mcp-toolkit-client-lifecycle.html))
+- **Task:** Make sure CallAssist never phones anyone without the user's explicit "yes".
+- **Steps:** Read the confirmation rules, then the client lifecycle page to see how Alexa+ asks the user.
+- **Expected:** A recommended pattern: elicitation, or a documented two-step tool call.
+- **Actual:** The rules require a read-back and an explicit yes, but the documented client doesn't declare elicitation, and no two-step pattern is described. A plain `confirmed: true` flag can be set by the model without the user ever hearing the read-back.
+- **Severity:** Medium
+- **Workaround:** The read-back returns a one-time `confirmationToken` bound to the exact tool, person and words; the action runs only when that token comes back unchanged. The token also works as an idempotency key if Alexa+ retries. Covered by tests for forged, swapped and replayed confirmations.
+- **Suggestion:** Document the recommended confirmation pattern for clients without elicitation, ideally with a server-verifiable example.
+
+## 2026-10-21 · Children's-data rule vs. everyday personal-assistant requests
+
+- **Tool:** Alexa+ Policy Requirements ([§4](https://developer.amazon.com/docs/alexaplus/add-ons/policy-requirements.html))
+- **Task:** Let users hand everyday tasks to their staff and family by voice.
+- **Steps:** Read §4 ("must never target children or collect their data"), then listed common requests a busy parent would make.
+- **Expected:** Guidance on incidental mentions, e.g. "pick up the parcel from my son's school".
+- **Actual:** No guidance on free-text fields that may mention a child in passing. Many of the most common assistant requests (school pickup, daycare) touch this rule.
+- **Severity:** Medium
+- **Workaround:** CallAssist declines any task or message that mentions children (patterns such as "my son", "7-year-old", "daycare") with a polite spoken reason, and says so in its privacy policy.
+- **Suggestion:** Add examples of allowed and not-allowed incidental mentions, or a recommended refusal wording.
+
+## 2026-10-20 · MCP TypeScript SDK client can't pin an older protocol version
+
+- **Tool:** MCP TypeScript SDK 1.32 (used to build our local Alexa+ emulator)
+- **Task:** Make the emulator behave like the documented Alexa+ client, which sends `protocolVersion: "2025-03-26"`.
+- **Steps:** Looked for a client option to choose the protocol version and client info.
+- **Expected:** An option such as `protocolVersion` on `Client`.
+- **Actual:** The client always sends the latest version. There is no option to pin an older one.
+- **Severity:** Low
+- **Workaround:** A small custom `fetch` for the Streamable HTTP transport rewrites the `initialize` request to `2025-03-26` with Alexa+'s client name and `roots` capability. The server then negotiates down, exactly as with real Alexa+.
+- **Suggestion:** For Amazon: publish a tiny reference client (or a conformance script) that behaves like Alexa+, so entrants without partner access can test against the real handshake.
 
 ## 2026-10-21 · Amazon Connect's MCP client asks the Gateway for 2025-03-26
 
