@@ -3,9 +3,9 @@
 // contact flow's Lambda posts what the person said to /connect/turn, and we
 // answer with what CallAssist says next, from the same conversation engine the
 // local phones use.
-import { ConnectClient, StartOutboundVoiceContactCommand, StopContactCommand } from "@aws-sdk/client-connect";
+import { ConnectClient, StartOutboundVoiceContactCommand, StartWebRTCContactCommand, StopContactCommand } from "@aws-sdk/client-connect";
 import type { CallRecord } from "./store.js";
-import type { PhoneEvents, Telephony } from "./telephony.js";
+import type { LocalPhoneNetwork, PhoneEvents, Telephony } from "./telephony.js";
 
 export interface ConnectSettings {
   region: string;
@@ -19,6 +19,8 @@ export interface ConnectSettings {
 export interface ConnectApi {
   startCall(input: { destination: string; attributes: Record<string, string> }): Promise<{ contactId: string }>;
   stopCall(contactId: string): Promise<void>;
+  /** Browser calling: a Connect voice contact over WebRTC, no phone number needed. */
+  startWebCall?(input: { displayName: string; attributes: Record<string, string> }): Promise<{ contactId: string; connectionData: unknown }>;
 }
 
 export function awsConnectApi(s: ConnectSettings): ConnectApi {
@@ -39,6 +41,17 @@ export function awsConnectApi(s: ConnectSettings): ConnectApi {
     async stopCall(contactId) {
       await client.send(new StopContactCommand({ InstanceId: s.instanceId, ContactId: contactId }));
     },
+    async startWebCall({ displayName, attributes }) {
+      const out = await client.send(
+        new StartWebRTCContactCommand({
+          InstanceId: s.instanceId,
+          ContactFlowId: s.contactFlowId,
+          ParticipantDetails: { DisplayName: displayName.slice(0, 256) },
+          Attributes: attributes,
+        }),
+      );
+      return { contactId: out.ContactId ?? "", connectionData: out.ConnectionData };
+    },
   };
 }
 
@@ -50,13 +63,13 @@ export interface TurnResult {
 }
 
 export class ConnectTelephony implements Telephony {
-  readonly name = "amazon-connect";
-  private events?: PhoneEvents;
-  private queued = new Map<string, string[]>();
-  private ended = new Set<string>();
-  private contacts = new Map<string, string>();
+  readonly name: string = "amazon-connect";
+  protected events?: PhoneEvents;
+  protected queued = new Map<string, string[]>();
+  protected ended = new Set<string>();
+  protected contacts = new Map<string, string>();
 
-  constructor(private api: ConnectApi, private log: (e: Record<string, unknown>) => void = () => {}) {}
+  constructor(protected api: ConnectApi, protected log: (e: Record<string, unknown>) => void = () => {}) {}
 
   connect(events: PhoneEvents): void {
     this.events = events;
@@ -87,7 +100,7 @@ export class ConnectTelephony implements Telephony {
     if (contactId && !this.inTurn.has(callId)) this.api.stopCall(contactId).catch(() => {});
   }
 
-  private inTurn = new Set<string>();
+  protected inTurn = new Set<string>();
 
   /** One turn from the contact flow. The engine is synchronous, so its reply is ready right after. */
   turn(callId: string, event: "answered" | "heard" | "hangup", text = ""): TurnResult {
@@ -109,10 +122,73 @@ export class ConnectTelephony implements Telephony {
     return { say: lines.join(" "), end };
   }
 
-  private cleanup(callId: string): void {
+  protected cleanup(callId: string): void {
     this.queued.delete(callId);
     this.contacts.delete(callId);
     setTimeout(() => this.ended.delete(callId), 60_000).unref?.();
+  }
+}
+
+/**
+ * Browser calling through Amazon Connect. The worker's phone page rings (no
+ * phone number involved); on Accept the page asks us to start a Connect
+ * WebRTC contact and joins its audio. From then on it is the same Connect
+ * flow, Lex bot, Lambda and /connect/turn conversation as a phone call.
+ */
+export class ConnectWebCallTelephony extends ConnectTelephony {
+  readonly name = "amazon-connect-web";
+  private callContact = new Map<string, string>();
+
+  constructor(api: ConnectApi, private phones: LocalPhoneNetwork, log: (e: Record<string, unknown>) => void = () => {}) {
+    super(api, log);
+  }
+
+  ring(call: CallRecord): void {
+    this.queued.set(call.id, []);
+    this.callContact.set(call.id, call.contactId);
+    this.phones.signal(call.contactId, { type: "incoming", callId: call.id, from: "CallAssist", purpose: call.purpose, via: "connect-web" });
+  }
+
+  owns(callId: string): boolean {
+    return this.callContact.has(callId) || this.queued.has(callId);
+  }
+
+  /** The worker tapped Accept: start the Connect contact and hand the page its audio connection. */
+  async accept(callId: string, displayName: string): Promise<{ connectionData: unknown }> {
+    if (!this.api.startWebCall) throw new Error("browser calling not available");
+    if (!this.callContact.has(callId)) throw new Error("unknown or finished call");
+    const { contactId, connectionData } = await this.api.startWebCall({ displayName, attributes: { callId, purpose: "web" } });
+    this.contacts.set(callId, contactId);
+    this.log({ event: "connect_web_call_started", callId, contactId });
+    return { connectionData };
+  }
+
+  /** The worker hung up on the page: end the Connect contact too. */
+  endFromPage(callId: string): void {
+    const contactId = this.contacts.get(callId);
+    if (contactId) this.api.stopCall(contactId).catch(() => {});
+    this.contacts.delete(callId);
+  }
+
+  speak(callId: string, text: string): void {
+    super.speak(callId, text);
+    const contactId = this.callContact.get(callId);
+    if (contactId) this.phones.signal(contactId, { type: "caption", callId, who: "assistant", text });
+  }
+
+  turn(callId: string, event: "answered" | "heard" | "hangup", text = ""): TurnResult {
+    const contactId = this.callContact.get(callId);
+    if (event === "heard" && text.trim() && contactId) this.phones.signal(contactId, { type: "caption", callId, who: "contact", text });
+    const r = super.turn(callId, event, text);
+    if (r.end && contactId) setTimeout(() => this.phones.signal(contactId, { type: "hangup", callId, reason: "ended" }), 8000).unref?.();
+    return r;
+  }
+
+  hangUp(callId: string, reason: string): void {
+    super.hangUp(callId, reason);
+    const contactId = this.callContact.get(callId);
+    if (contactId && !this.contacts.has(callId)) this.phones.signal(contactId, { type: "hangup", callId, reason });
+    this.callContact.delete(callId);
   }
 }
 

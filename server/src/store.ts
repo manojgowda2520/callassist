@@ -26,7 +26,7 @@ export interface Contact {
   /** When they asked not to be called again. */
   optedOutAt?: string;
   /** Which phone line reaches them: the local demo phones (default), Amazon Connect (US) or the SIP bridge (India). */
-  line?: "local" | "connect" | "sip";
+  line?: "local" | "connect" | "connect-web" | "sip";
 }
 
 /** The business responsible for the calls (47 CFR 64.1200(b)). */

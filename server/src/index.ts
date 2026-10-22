@@ -10,7 +10,7 @@ import { LocalOutbox } from "./email.js";
 import { AuthServer } from "./auth.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHmac, randomBytes } from "node:crypto";
-import { ConnectTelephony, TelephonyRouter, awsConnectApi } from "./connect.js";
+import { ConnectTelephony, ConnectWebCallTelephony, TelephonyRouter, awsConnectApi } from "./connect.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.PORT ?? 8787);
@@ -24,24 +24,29 @@ const store = Store.fromFile(join(root, "data/seed.json"), process.env.NO_PERSIS
 const phone = new LocalPhoneNetwork();
 
 // Amazon Connect (US) when configured. Each contact's `line` picks local demo phone vs. real call.
-const connect = process.env.CONNECT_INSTANCE_ID
-  ? new ConnectTelephony(
-      awsConnectApi({
+const connectApi =
+  process.env.CONNECT_INSTANCE_ID && process.env.CONNECT_CONTACT_FLOW_ID
+    ? awsConnectApi({
         region: process.env.AWS_REGION ?? "us-east-1",
         instanceId: process.env.CONNECT_INSTANCE_ID,
-        contactFlowId: process.env.CONNECT_CONTACT_FLOW_ID ?? "",
+        contactFlowId: process.env.CONNECT_CONTACT_FLOW_ID,
         sourcePhoneNumber: process.env.CONNECT_SOURCE_NUMBER ?? "",
-      }),
-      log,
-    )
-  : undefined;
-const lines = new TelephonyRouter({ local: phone, ...(connect ? { connect } : {}) }, (call) => store.contact(call.contactId)?.line ?? "local");
+      })
+    : undefined;
+// Real phone calls need a claimed number; browser calls only need the instance and flow.
+const connect = connectApi && process.env.CONNECT_SOURCE_NUMBER ? new ConnectTelephony(connectApi, log) : undefined;
+const webCalls = connectApi ? new ConnectWebCallTelephony(connectApi, phone, log) : undefined;
+const defaultLine = process.env.CONNECT_DEFAULT_LINE ?? "local";
+const lines = new TelephonyRouter(
+  { local: phone, ...(connect ? { connect } : {}), ...(webCalls ? { "connect-web": webCalls } : {}) },
+  (call) => store.contact(call.contactId)?.line ?? defaultLine,
+);
 const assistant = new Assistant(
   store,
   lines,
   {
     // DEMO_FAST=1 shortens waits so retries and follow-ups show up within a minute.
-    ringTimeoutMs: connect ? 50_000 : fast ? 20_000 : 30_000,
+    ringTimeoutMs: connectApi ? 50_000 : fast ? 20_000 : 30_000,
     retryDelayMs: fast ? 20_000 : 120_000,
     followUpGraceMs: fast ? 15_000 : 120_000,
     mailer: outbox,
@@ -100,6 +105,7 @@ const app = createApp({
   trustProxy: process.env.TRUST_PROXY === "1",
   log,
   connect,
+  webCalls,
   outbox,
   emitMetrics: process.env.EMF === "1",
   auth,
@@ -116,5 +122,5 @@ app.listen(PORT, HOST, () => {
   console.log(`  Call console     /console`);
   console.log(`  MCP endpoint     /mcp   (phone agent: /agent/mcp)`);
   console.log(`  OAuth            ${authOn ? "on (/oauth/token, /oauth/authorize)" : "OFF (AUTH=off)"}`);
-  console.log(`  Phone lines      local demo phones${connect ? " + Amazon Connect (/connect/turn)" : ""}`);
+  console.log(`  Phone lines      local demo phones${webCalls ? " + Amazon Connect browser calls" : ""}${connect ? " + Amazon Connect phone calls" : ""} (default: ${defaultLine})`);
 });

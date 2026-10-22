@@ -13,7 +13,7 @@ import { AlexaAccount, AlexaBrain, type AlexaAuthOptions, type McpTraffic } from
 import type { AuthServer } from "./auth.js";
 import { Metrics, rateLimit } from "./ops.js";
 import type { LocalOutbox } from "./email.js";
-import type { ConnectTelephony } from "./connect.js";
+import type { ConnectTelephony, ConnectWebCallTelephony } from "./connect.js";
 import { LocalTts, VOICES } from "./tts.js";
 
 export interface AppOptions {
@@ -42,6 +42,8 @@ export interface AppOptions {
   alexaAuth?: AlexaAuthOptions;
   /** Amazon Connect line, when configured: its contact-flow Lambda posts each turn to /connect/turn. */
   connect?: ConnectTelephony;
+  /** Amazon Connect browser calling (WebRTC), when configured. */
+  webCalls?: ConnectWebCallTelephony;
   /** Local email outbox, shown on the console. */
   outbox?: LocalOutbox;
   /** Write CloudWatch EMF metric lines to the log. */
@@ -169,13 +171,14 @@ export function createApp(opts: AppOptions) {
 
   // Amazon Connect contact flow → Lambda → here, once per turn of the conversation.
   app.post("/connect/turn", agentAuth, (req, res) => {
-    if (!opts.connect) return void res.status(404).json({ error: "Amazon Connect line not configured" });
+    const line = opts.webCalls && opts.webCalls.owns(String(req.body?.callId ?? "")) ? opts.webCalls : opts.connect ?? opts.webCalls;
+    if (!line) return void res.status(404).json({ error: "Amazon Connect line not configured" });
     const callId = typeof req.body?.callId === "string" ? req.body.callId : "";
     const event = req.body?.event;
     const text = typeof req.body?.text === "string" ? req.body.text.slice(0, 500) : "";
     if (!callId || !["answered", "heard", "hangup"].includes(event)) return void res.status(400).json({ error: "callId and event (answered|heard|hangup) required" });
     if (!store.calls.get(callId)) return void res.json({ say: "Sorry, this call has ended. Goodbye.", end: true });
-    res.json(opts.connect.turn(callId, event, text));
+    res.json(line.turn(callId, event, text));
   });
 
   // ---------------------------------------------------------------- state + live events
@@ -210,7 +213,7 @@ export function createApp(opts: AppOptions) {
     const s = sse(res);
     s.send("hello", { contact: { id: contact.id, name: contact.name, label: contact.label, phone: maskPhone(contact.phone) }, user: store.user.name });
     const ringing = store.activeCalls().find((c) => c.contactId === contact.id && c.status === "ringing");
-    if (ringing) s.send("signal", { type: "incoming", callId: ringing.id, from: "CallAssist", purpose: ringing.purpose });
+    if (ringing) s.send("signal", { type: "incoming", callId: ringing.id, from: "CallAssist", purpose: ringing.purpose, ...(opts.webCalls?.owns(ringing.id) ? { via: "connect-web" } : {}) });
     const off = phone.listen(contact.id, (sig: PhoneSignal) => s.send("signal", sig.type === "say" ? { ...sig, audio: audioFor(sig.text) } : sig));
     s.onClose(off);
   });
@@ -231,8 +234,21 @@ export function createApp(opts: AppOptions) {
     phone.say(String(req.params.callId), text);
     res.json({ ok: true });
   });
+  // Browser calling: the worker accepted a ringing call; start the Connect WebRTC contact.
+  app.post("/api/phone/calls/:callId/webrtc", async (req, res) => {
+    const call = callFor(req, res);
+    if (!call) return;
+    if (!opts.webCalls) return void res.status(404).json({ error: "browser calling not configured" });
+    try {
+      res.json(await opts.webCalls.accept(call.id, call.contactName));
+    } catch (err) {
+      log({ event: "connect_web_call_failed", callId: call.id, error: String(err) });
+      res.status(502).json({ error: "Couldn't start the Amazon Connect call" });
+    }
+  });
   app.post("/api/phone/calls/:callId/reject", (req, res) => {
     if (!callFor(req, res)) return;
+    if (opts.webCalls?.owns(String(req.params.callId))) opts.webCalls.endFromPage(String(req.params.callId));
     phone.reject(String(req.params.callId));
     res.json({ ok: true });
   });

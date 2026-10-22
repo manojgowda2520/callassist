@@ -158,7 +158,7 @@ Resources:
               - !If
                 - HasConnect
                 - Effect: Allow
-                  Action: [connect:StartOutboundVoiceContact, connect:StopContact]
+                  Action: [connect:StartOutboundVoiceContact, connect:StartWebRTCContact, connect:StopContact]
                   Resource: [!Ref ConnectInstanceArn, !Sub "${ConnectInstanceArn}/contact/*", !Sub "${ConnectInstanceArn}/contact-flow/*"]
                 - !Ref AWS::NoValue
 

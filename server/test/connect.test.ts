@@ -177,3 +177,83 @@ test("real volunteer numbers can live in a git-ignored override file", () => {
   assert.equal(s.contact("c_raju")!.name, "Raju", "other fields kept");
   assert.equal(s.contact("c_new")!.optedOut, false);
 });
+
+// ---------------------------------------------------------------- browser calling (WebRTC)
+import { ConnectWebCallTelephony } from "../src/connect.js";
+import type { PhoneSignal } from "../src/telephony.js";
+
+async function startWeb() {
+  const store = new Store(structuredClone(SEED));
+  const webStarts: { displayName: string; attributes: Record<string, string> }[] = [];
+  const stopped: string[] = [];
+  const api: ConnectApi = {
+    async startCall() { throw new Error("no numbers"); },
+    async stopCall(id) { stopped.push(id); },
+    async startWebCall(input) { webStarts.push(input); return { contactId: "web-contact-1", connectionData: { Meeting: { MeetingId: "m1" }, Attendee: { AttendeeId: "a1", JoinToken: "t" } } }; },
+  };
+  const local = new LocalPhoneNetwork();
+  const web = new ConnectWebCallTelephony(api, local);
+  const router = new TelephonyRouter({ local, "connect-web": web }, () => "connect-web");
+  const assistant = new Assistant(store, router, { ...FAST, ringTimeoutMs: 3000 });
+  const app = createApp({ assistant, phone: local, webCalls: web, publicDir: join(root, "public"), rateLimits: { mcp: 0, token: 0, alexa: 0 } });
+  const server: Server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  assistant.start();
+  const signals: PhoneSignal[] = [];
+  local.listen("c_raju", (s) => signals.push(s));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return {
+    url, store, assistant, webStarts, stopped, signals,
+    close: async () => { assistant.stop(); server.closeAllConnections?.(); await new Promise<void>((r) => server.close(() => r())); },
+  };
+}
+
+test("browser call: the phone page rings with a Connect flag, no PSTN call is placed", async () => {
+  const w = await startWeb();
+  rig = { ...w, started: [], close: w.close } as any;
+  const t = w.assistant.startTask({ kind: "task", contact: w.store.contact("c_raju")!, details: "bring the visitor badges" });
+  await until(() => w.signals.some((s) => s.type === "incoming"));
+  const ring = w.signals.find((s) => s.type === "incoming") as any;
+  assert.equal(ring.via, "connect-web");
+  assert.equal(ring.callId, t.callIds[0]);
+  assert.equal(w.webStarts.length, 0, "nothing starts until the worker accepts");
+});
+
+test("browser call: accept starts a Connect WebRTC contact; turns flow with live captions", async () => {
+  const w = await startWeb();
+  rig = { ...w, started: [], close: w.close } as any;
+  const t = w.assistant.startTask({ kind: "task", contact: w.store.contact("c_raju")!, details: "bring the visitor badges" });
+  const callId = t.callIds[0];
+  const acc = await (await fetch(`${w.url}/api/phone/calls/${callId}/webrtc`, { method: "POST" })).json();
+  assert.equal(acc.connectionData.Meeting.MeetingId, "m1");
+  assert.equal(w.webStarts[0].attributes.callId, callId, "the Connect flow knows which CallAssist call this is");
+  assert.equal(w.webStarts[0].displayName, "Raju");
+  const hello = await turn(w as any, callId, "answered");
+  assert.match(hello.say, /AI assistant calling for Manoj/);
+  assert.ok(w.signals.some((s) => s.type === "caption" && s.who === "assistant" && /AI assistant/.test(s.text)), "captions reach the page");
+  await turn(w as any, callId, "heard", "okay");
+  const bye = await turn(w as any, callId, "heard", "in five minutes");
+  assert.equal(bye.end, true);
+  assert.ok(w.signals.some((s) => s.type === "caption" && s.who === "contact" && s.text === "in five minutes"));
+  assert.equal(w.store.tasks.get(t.id)!.eta, "in 5 minutes");
+});
+
+test("browser call: declining on the page ends it without touching Connect", async () => {
+  const w = await startWeb();
+  rig = { ...w, started: [], close: w.close } as any;
+  const t = w.assistant.startTask({ kind: "task", contact: w.store.contact("c_raju")!, details: "check the printer" });
+  await fetch(`${w.url}/api/phone/calls/${t.callIds[0]}/reject`, { method: "POST" });
+  await until(() => w.store.tasks.get(t.id)!.nextActionAt, 2000, "retry scheduled");
+  assert.equal(w.webStarts.length, 0);
+});
+
+test("browser call: hanging up on the page also ends the Connect contact", async () => {
+  const w = await startWeb();
+  rig = { ...w, started: [], close: w.close } as any;
+  const t = w.assistant.startTask({ kind: "task", contact: w.store.contact("c_raju")!, details: "check the printer" });
+  const callId = t.callIds[0];
+  await fetch(`${w.url}/api/phone/calls/${callId}/webrtc`, { method: "POST" });
+  await turn(w as any, callId, "answered");
+  await fetch(`${w.url}/api/phone/calls/${callId}/reject`, { method: "POST" });
+  assert.deepEqual(w.stopped, ["web-contact-1"]);
+});

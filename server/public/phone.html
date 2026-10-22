@@ -126,6 +126,9 @@
 
 <script type="module">
 import { api, stream, AudioQueue, Ringtone, Listener, el } from "/static/common.js";
+// Amazon Connect browser calling (WebRTC). Loaded only when a Connect call arrives.
+let chime = null;
+const loadChime = async () => (chime ??= await import("/static/vendor/chime.js"));
 const $ = (id) => document.getElementById(id);
 const contactId = location.pathname.split("/").pop();
 if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
@@ -133,6 +136,9 @@ if (new URLSearchParams(location.search).has("embed")) document.body.classList.a
 const voice = new AudioQueue({ voiceName: "Samantha" });
 const ring = new Ringtone();
 let me = null, user = "your boss", callId = null, purpose = null, startedAt = 0, handsFree = false, endTimer = null;
+let via = null, meeting = null;
+const remoteAudio = new Audio();
+remoteAudio.autoplay = true;
 
 const show = (v) => ["idle", "incoming", "incall"].forEach((id) => $(id).classList.toggle("on", id === v));
 const tick = () => {
@@ -186,9 +192,46 @@ $("compose").onsubmit = (e) => { e.preventDefault(); send($("text").value); };
 $("accept").onclick = async () => {
   unlock(); ring.stop();
   if (!callId) return;
+  if (via === "connect-web") return acceptConnectCall();
   startCall("CallAssist");
   await api(`/api/phone/calls/${callId}/answer`, {}).catch(() => {});
 };
+
+// Real Amazon Connect call over WebRTC: Connect speaks (neural voice) and listens (Lex).
+async function acceptConnectCall() {
+  startCall("CallAssist");
+  bubble("Connecting to Amazon Connect…", "sys");
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true }).then((st) => st.getTracks().forEach((t) => t.stop()));
+  } catch {
+    bubble("Microphone blocked. Allow the microphone and try again.", "sys");
+    return;
+  }
+  try {
+    const [{ connectionData }, sdk] = await Promise.all([api(`/api/phone/calls/${callId}/webrtc`, {}), loadChime()]);
+    const logger = new sdk.ConsoleLogger("callassist", sdk.LogLevel.WARN);
+    const devices = new sdk.DefaultDeviceController(logger);
+    const config = new sdk.MeetingSessionConfiguration({ Meeting: connectionData.Meeting }, { Attendee: connectionData.Attendee });
+    meeting = new sdk.DefaultMeetingSession(config, logger, devices);
+    const mics = await meeting.audioVideo.listAudioInputDevices();
+    await meeting.audioVideo.startAudioInput(mics[0]?.deviceId);
+    await meeting.audioVideo.bindAudioElement(remoteAudio);
+    meeting.audioVideo.addObserver({
+      audioVideoDidStart: () => bubble("Connected · real Amazon Connect call. Just talk.", "sys"),
+      audioVideoDidStop: () => { if (callId) endCall("Call ended"); },
+    });
+    meeting.audioVideo.start();
+  } catch (e) {
+    bubble("Couldn't connect the Amazon Connect call.", "sys");
+    console.warn(e);
+  }
+}
+
+function stopMeeting() {
+  if (!meeting) return;
+  try { meeting.audioVideo.stop(); } catch {}
+  meeting = null;
+}
 $("decline").onclick = async () => { ring.stop(); if (callId) await api(`/api/phone/calls/${callId}/reject`, {}).catch(() => {}); endCall("Declined"); };
 $("end").onclick = async () => { if (callId) await api(`/api/phone/calls/${callId}/reject`, {}).catch(() => {}); endCall("You ended the call"); };
 $("dial").onclick = async () => {
@@ -205,11 +248,15 @@ function startCall(label) {
   $("bubbles").innerHTML = "";
   startedAt = Date.now();
   setQuick(purpose);
+  const live = via === "connect-web";
+  $("quick").style.display = live ? "none" : "";
+  $("compose").style.display = live ? "none" : "";
   show("incall");
   bubble(label === "inbound" ? "Calling CallAssist…" : "Connected", "sys");
 }
 function endCall(note) {
   ring.stop();
+  stopMeeting();
   listener.stop();
   handsFree = false;
   if ($("incall").classList.contains("on")) bubble(note || "Call ended", "sys");
@@ -237,18 +284,20 @@ stream(`/api/phone/${contactId}/events`, {
   signal: (s) => {
     if (s.type === "incoming") {
       if (callId && callId !== s.callId && $("incall").classList.contains("on")) return; // busy
-      callId = s.callId; purpose = s.purpose;
-      $("incWhat").textContent = purpose === "follow_up" ? `Checking in for ${user}` : `AI assistant for ${user}`;
+      callId = s.callId; purpose = s.purpose; via = s.via || null;
+      $("incWhat").textContent = (purpose === "follow_up" ? `Checking in for ${user}` : `AI assistant for ${user}`) + (via === "connect-web" ? " · Amazon Connect" : "");
       show("incoming");
       ring.start();
     } else if (s.type === "outgoing_connected") {
-      callId = s.callId; purpose = "inbound";
+      callId = s.callId; purpose = "inbound"; via = null;
       startCall("inbound");
     } else if (s.type === "say" && s.callId === callId) {
       if (!$("incall").classList.contains("on")) startCall("CallAssist");
       const b = bubble(s.text, "ai");
       b.dataset.line = s.text;
       voice.push(s.text, s.audio);
+    } else if (s.type === "caption" && s.callId === callId) {
+      bubble(s.text, s.who === "assistant" ? "ai" : "me");
     } else if (s.type === "hangup" && s.callId === callId) {
       endCall(s.reason === "no_answer" ? "Missed call from CallAssist" : s.reason === "cancelled" ? "CallAssist hung up" : "Call ended");
     }

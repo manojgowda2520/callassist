@@ -26,7 +26,8 @@ export interface Telephony {
 }
 
 export type PhoneSignal =
-  | { type: "incoming"; callId: string; from: string; purpose: string }
+  | { type: "incoming"; callId: string; from: string; purpose: string; via?: "connect-web" }
+  | { type: "caption"; callId: string; who: "assistant" | "contact"; text: string }
   | { type: "say"; callId: string; text: string; audio?: string }
   | { type: "hangup"; callId: string; reason: string }
   | { type: "outgoing_connected"; callId: string };
@@ -94,6 +95,11 @@ export class LocalPhoneNetwork implements Telephony {
   reject(callId: string): void {
     this.events?.hungUp(callId, "contact");
     this.callContact.delete(callId);
+  }
+
+  /** Send any signal to one contact's phone page (used by lines that only borrow the page, like browser calls). */
+  signal(contactId: string, s: PhoneSignal): void {
+    this.send(contactId, s);
   }
 
   private send(contactId: string, s: PhoneSignal): void {
