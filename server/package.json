@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "build:host": "esbuild scripts/host-entry.js --bundle --format=esm --minify --platform=browser --outfile=public/static/vendor/mcp-apps-host.js",
     "build:view": "esbuild scripts/view-entry.js --bundle --format=iife --global-name=McpApps --minify --platform=browser --outfile=src/ui/vendor/mcp-apps-view.js",
-    "build:ui": "npm run build:host && npm run build:view"
+    "build:ui": "npm run build:host && npm run build:view",
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/ui && cp -R src/ui/card.html src/ui/vendor dist/ui/",
+    "start:prod": "node dist/index.js"
   },
   "dependencies": {
     "@aws-sdk/client-connect": "^3.1155.0",
