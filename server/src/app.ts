@@ -14,13 +14,13 @@ import type { AuthServer } from "./auth.js";
 import { Metrics, rateLimit } from "./ops.js";
 import type { LocalOutbox } from "./email.js";
 import type { ConnectTelephony, ConnectWebCallTelephony } from "./connect.js";
-import { LocalTts, VOICES } from "./tts.js";
+import type { Tts } from "./tts.js";
 
 export interface AppOptions {
   assistant: Assistant;
   phone: LocalPhoneNetwork;
   publicDir: string;
-  tts?: LocalTts;
+  tts?: Tts;
   /** Full URL of this server's /mcp, for the emulator's MCP client. */
   selfMcpUrl?: string;
   /** Host headers accepted on /mcp (DNS-rebinding protection). Empty = allow all. */
@@ -261,9 +261,9 @@ export function createApp(opts: AppOptions) {
   app.get("/tts", async (req, res) => {
     const text = typeof req.query.text === "string" ? req.query.text : "";
     if (!opts.tts?.available || !text) return void res.status(404).end();
-    const voice = req.query.voice === "alexa" ? VOICES.alexa : VOICES.agent;
+    const role = req.query.voice === "alexa" ? "alexa" : "agent";
     try {
-      const file = await opts.tts.file(text, voice);
+      const file = await opts.tts.file(text, role);
       res.set("cache-control", "public, max-age=86400").type("audio/mpeg").sendFile(file);
     } catch (err) {
       log({ event: "tts_error", error: String(err) });
@@ -379,7 +379,7 @@ export function createApp(opts: AppOptions) {
   app.get("/privacy", page("privacy.html"));
   app.get("/terms", page("terms.html"));
   app.use("/static", express.static(join(opts.publicDir, "static"), { maxAge: 0 }));
-  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length, callingHours: assistant.config.callingHours ? "8 AM-9 PM callee time" : "off (demo)", auth: !!opts.auth }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, provider: phone.name, activeCalls: store.activeCalls().length, callingHours: assistant.config.callingHours ? "8 AM-9 PM callee time" : "off (demo)", auth: !!opts.auth, voices: opts.tts?.available ? opts.tts.engine : "browser" }));
 
   // Bad JSON and other request errors: answer cleanly instead of printing a stack.
   app.use((err: { type?: string; status?: number }, _req: Request, res: Response, _next: () => void) => {

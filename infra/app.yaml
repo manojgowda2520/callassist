@@ -155,6 +155,9 @@ Resources:
               - Effect: Allow
                 Action: [secretsmanager:GetSecretValue]
                 Resource: !Ref AppSecrets
+              - Effect: Allow
+                Action: [polly:SynthesizeSpeech]
+                Resource: "*"
               - !If
                 - HasConnect
                 - Effect: Allow

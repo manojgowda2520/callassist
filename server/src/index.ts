@@ -5,7 +5,7 @@ import { Assistant } from "./assistant.js";
 import { createApp } from "./app.js";
 import { Store } from "./store.js";
 import { LocalPhoneNetwork } from "./telephony.js";
-import { LocalTts } from "./tts.js";
+import { LocalTts, PollyTts, type Tts } from "./tts.js";
 import { LocalOutbox } from "./email.js";
 import { AuthServer } from "./auth.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -56,7 +56,10 @@ const assistant = new Assistant(
   },
   log,
 );
-const tts = new LocalTts(join(root, "data/local/tts"), process.env.FFMPEG ?? "ffmpeg");
+// Voices: Amazon Polly generative (closest to Alexa+) on AWS, or locally with TTS_ENGINE=polly and AWS
+// credentials; otherwise the Mac's built-in voices.
+const ttsEngine = process.env.TTS_ENGINE ?? (process.env.PUBLIC_URL?.startsWith("https://") ? "polly" : "say");
+const tts: Tts = ttsEngine === "polly" ? new PollyTts(join(root, "data/local/tts")) : new LocalTts(join(root, "data/local/tts"), process.env.FFMPEG ?? "ffmpeg");
 
 // Local secrets (git-ignored). On AWS these live in Secrets Manager.
 const secretsFile = join(root, "data/local/secrets.json");
@@ -123,5 +126,6 @@ app.listen(PORT, HOST, () => {
   console.log(`  Call console     /console`);
   console.log(`  MCP endpoint     /mcp   (phone agent: /agent/mcp)`);
   console.log(`  OAuth            ${authOn ? "on (/oauth/token, /oauth/authorize)" : "OFF (AUTH=off)"}`);
+  console.log(`  Voices           ${tts.engine}${tts.available ? "" : " (unavailable: browser voices)"}`);
   console.log(`  Phone lines      local demo phones${webCalls ? " + Amazon Connect browser calls" : ""}${connect ? " + Amazon Connect phone calls" : ""} (default: ${defaultLine})`);
 });
