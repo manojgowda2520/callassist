@@ -8,6 +8,10 @@ Parameters:
   GitHubRepo:
     Type: String
     Default: manojgowda2520/callassist
+  GitHubRepoImmutable:
+    Type: String
+    Default: manojgowda2520@111368799/callassist@1429317243
+    Description: The repo as GitHub's immutable OIDC subject names it (owner@ownerId/repo@repoId).
   CreateProvider:
     Type: String
     Default: "true"
@@ -40,7 +44,9 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/main
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepo}:ref:refs/heads/main
+                  - !Sub repo:${GitHubRepoImmutable}:ref:refs/heads/main
       Policies:
         - PolicyName: deploy-callassist
           PolicyDocument:
