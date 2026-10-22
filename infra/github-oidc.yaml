@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Lets GitHub Actions deploy CallAssist with short-lived OIDC credentials (no stored AWS keys).
+  Only the main branch of the CallAssist repo can assume the role, and it can only push the
+  image and run the deploy script on the CallAssist server.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: manojgowda2520/callassist
+  CreateProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Set to false if this account already has the token.actions.githubusercontent.com provider.
+
+Conditions:
+  MakeProvider: !Equals [!Ref CreateProvider, "true"]
+
+Resources:
+  Provider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: callassist-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [MakeProvider, !Ref Provider, !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/main
+      Policies:
+        - PolicyName: deploy-callassist
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EcrLogin
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: EcrPush
+                Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:InitiateLayerUpload, ecr:UploadLayerPart, ecr:CompleteLayerUpload, ecr:PutImage, ecr:BatchGetImage, ecr:DescribeImageScanFindings]
+                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/callassist
+              - Sid: RunShellDocument
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource: !Sub arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript
+              - Sid: OnlyOnTheCallAssistServer
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*
+                Condition:
+                  StringEquals:
+                    ssm:resourceTag/role: callassist-app
+              - Sid: ReadCommandResults
+                Effect: Allow
+                Action: [ssm:GetCommandInvocation, ssm:ListCommandInvocations, ec2:DescribeInstances]
+                Resource: "*"
+              - Sid: DriftCheck
+                Effect: Allow
+                Action: [cloudformation:DetectStackDrift, cloudformation:DescribeStackDriftDetectionStatus, cloudformation:DescribeStackResourceDrifts, cloudformation:DescribeStacks]
+                Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/callassist-*/*
+
+Outputs:
+  DeployRoleArn:
+    Description: Put this in the GitHub repo variable AWS_DEPLOY_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn

@@ -1,0 +1,463 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CallAssist phone line on Amazon Connect (us-east-1). Connect places the call and does the
+  voice; each turn of the conversation goes to the CallAssist server through a Lambda.
+  The Connect instance and numbers are kept on stack deletion: AWS limits how often
+  instances can be created or deleted.
+
+Parameters:
+  InstanceAlias:
+    Type: String
+    Description: Globally unique name for the Connect instance (lowercase letters, numbers, hyphens).
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{2,60}[a-z0-9]$"
+  AppUrl:
+    Type: String
+    Description: Public HTTPS URL of the CallAssist server, without a trailing slash (e.g. https://d123.cloudfront.net).
+    AllowedPattern: "^https://[^/]+$"
+  AgentSecretArn:
+    Type: String
+    Description: The CallAssist app secret (output AppSecretArn of the app stack). The phone-agent client secret is derived from it.
+  Voice:
+    Type: String
+    Default: Joanna
+    AllowedValues: [Joanna, Matthew, Ruth, Stephen, Danielle, Gregory]
+    Description: Neural voice for the calls.
+
+Resources:
+  # ------------------------------------------------------------------ instance + numbers
+  Instance:
+    Type: AWS::Connect::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      IdentityManagementType: CONNECT_MANAGED
+      InstanceAlias: !Ref InstanceAlias
+      Attributes:
+        InboundCalls: true
+        OutboundCalls: true
+        ContactflowLogs: true
+        ContactLens: false
+      Tags:
+        - { Key: project, Value: callassist }
+
+  CallerNumber:
+    Type: AWS::Connect::PhoneNumber
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TargetArn: !GetAtt Instance.Arn
+      CountryCode: US
+      Type: DID
+      Description: CallAssist caller ID (outbound)
+      Tags:
+        - { Key: project, Value: callassist }
+
+  WorkerLineNumber:
+    Type: AWS::Connect::PhoneNumber
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TargetArn: !GetAtt Instance.Arn
+      CountryCode: US
+      Type: DID
+      Description: Test "worker" line, answered by volunteers in the Connect softphone
+      Tags:
+        - { Key: project, Value: callassist }
+
+  # ------------------------------------------------------------------ queue for volunteers
+  Hours:
+    Type: AWS::Connect::HoursOfOperation
+    Properties:
+      InstanceArn: !GetAtt Instance.Arn
+      Name: Always open
+      TimeZone: UTC
+      Config:
+        - { Day: MONDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: TUESDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: WEDNESDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: THURSDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: FRIDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: SATURDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+        - { Day: SUNDAY, StartTime: { Hours: 0, Minutes: 0 }, EndTime: { Hours: 23, Minutes: 59 } }
+
+  WorkersQueue:
+    Type: AWS::Connect::Queue
+    Properties:
+      InstanceArn: !GetAtt Instance.Arn
+      Name: Test workers
+      Description: Volunteers playing CallAssist's team members answer here
+      HoursOfOperationArn: !GetAtt Hours.HoursOfOperationArn
+
+  WorkersRouting:
+    Type: AWS::Connect::RoutingProfile
+    Properties:
+      InstanceArn: !GetAtt Instance.Arn
+      Name: Test workers
+      Description: Voice only, test workers queue
+      DefaultOutboundQueueArn: !GetAtt WorkersQueue.QueueArn
+      MediaConcurrencies:
+        - { Channel: VOICE, Concurrency: 1 }
+      QueueConfigs:
+        - Delay: 0
+          Priority: 1
+          QueueReference: { Channel: VOICE, QueueArn: !GetAtt WorkersQueue.QueueArn }
+
+  # ------------------------------------------------------------------ turn Lambda (flow → CallAssist)
+  TurnRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: read-agent-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - { Effect: Allow, Action: secretsmanager:GetSecretValue, Resource: !Ref AgentSecretArn }
+
+  TurnFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Amazon Connect contact flow → CallAssist /connect/turn
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 8
+      MemorySize: 256
+      Role: !GetAtt TurnRole.Arn
+      Environment:
+        Variables:
+          APP_URL: !Ref AppUrl
+          AGENT_SECRET_ARN: !Ref AgentSecretArn
+      Code:
+        ZipFile: |
+          const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+          const sm = new SecretsManagerClient({});
+          let secret, token, tokenExp = 0;
+          async function getToken() {
+            if (token && Date.now() < tokenExp - 60000) return token;
+            if (!secret) {
+              const master = JSON.parse((await sm.send(new GetSecretValueCommand({ SecretId: process.env.AGENT_SECRET_ARN }))).SecretString).jwt;
+              secret = require("crypto").createHmac("sha256", master).update("client:connect-phone-agent").digest("base64url");
+            }
+            const basic = Buffer.from(`connect-phone-agent:${encodeURIComponent(secret)}`).toString("base64");
+            const res = await fetch(`${process.env.APP_URL}/oauth/token`, {
+              method: "POST",
+              headers: { authorization: `Basic ${basic}`, "content-type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ grant_type: "client_credentials", scope: "agent:calls", resource: `${process.env.APP_URL}/agent/mcp` }),
+              signal: AbortSignal.timeout(4000),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(`token: ${body.error}`);
+            token = body.access_token;
+            tokenExp = Date.now() + body.expires_in * 1000;
+            return token;
+          }
+          exports.handler = async (event) => {
+            const attrs = (event.Details && event.Details.ContactData && event.Details.ContactData.Attributes) || {};
+            const p = (event.Details && event.Details.Parameters) || {};
+            try {
+              const res = await fetch(`${process.env.APP_URL}/connect/turn`, {
+                method: "POST",
+                headers: { authorization: `Bearer ${await getToken()}`, "content-type": "application/json" },
+                body: JSON.stringify({ callId: attrs.callId, event: p.event || "heard", text: p.text || "" }),
+                signal: AbortSignal.timeout(6000),
+              });
+              const j = await res.json();
+              console.log(JSON.stringify({ callId: attrs.callId, event: p.event, status: res.status, end: j.end }));
+              return { say: j.say || "Okay.", end: j.end ? "true" : "false" };
+            } catch (e) {
+              console.log(JSON.stringify({ callId: attrs.callId, error: String(e) }));
+              return { say: "Sorry, something went wrong on my side. I'll call back later. Goodbye.", end: "true" };
+            }
+          };
+
+  TurnLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TurnFunction}
+      RetentionInDays: 14
+
+  TurnFromConnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TurnFunction
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt Instance.Arn
+
+  TurnIntegration:
+    Type: AWS::Connect::IntegrationAssociation
+    Properties:
+      InstanceId: !GetAtt Instance.Arn
+      IntegrationType: LAMBDA_FUNCTION
+      IntegrationArn: !GetAtt TurnFunction.Arn
+
+  # ------------------------------------------------------------------ Lex bot (speech → text)
+  CaptureRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  CaptureFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lex code hook that hands the caller's exact words back to the contact flow
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 3
+      MemorySize: 128
+      Role: !GetAtt CaptureRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            const intent = event.sessionState.intent;
+            intent.state = "Fulfilled";
+            return {
+              sessionState: {
+                sessionAttributes: { ...(event.sessionState.sessionAttributes || {}), transcript: event.inputTranscript || "" },
+                dialogAction: { type: "Close" },
+                intent,
+              },
+            };
+          };
+
+  LexRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: lexv2.amazonaws.com }, Action: sts:AssumeRole }
+      Policies:
+        - PolicyName: polly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - { Effect: Allow, Action: polly:SynthesizeSpeech, Resource: "*" }
+
+  Bot:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: !Sub callassist-listener-${AWS::StackName}
+      Description: Turns what the person on the phone says into text for CallAssist
+      RoleArn: !GetAtt LexRole.Arn
+      DataPrivacy: { ChildDirected: false }
+      IdleSessionTTLInSeconds: 300
+      AutoBuildBotLocales: true
+      BotLocales:
+        - LocaleId: en_US
+          NluConfidenceThreshold: 0.4
+          VoiceSettings: { VoiceId: !Ref Voice, Engine: neural }
+          Intents:
+            - Name: Capture
+              Description: Anything the person says
+              SampleUtterances:
+                - { Utterance: "yes" }
+                - { Utterance: "okay" }
+                - { Utterance: "done" }
+              FulfillmentCodeHook: { Enabled: true }
+            - Name: FallbackIntent
+              ParentIntentSignature: AMAZON.FallbackIntent
+              FulfillmentCodeHook: { Enabled: true }
+
+  BotVersion:
+    Type: AWS::Lex::BotVersion
+    Properties:
+      BotId: !Ref Bot
+      BotVersionLocaleSpecification:
+        - LocaleId: en_US
+          BotVersionLocaleDetails: { SourceBotVersion: DRAFT }
+
+  BotAlias:
+    Type: AWS::Lex::BotAlias
+    Properties:
+      BotId: !Ref Bot
+      BotAliasName: live
+      BotVersion: !GetAtt BotVersion.BotVersion
+      BotAliasLocaleSettings:
+        - LocaleId: en_US
+          BotAliasLocaleSetting:
+            Enabled: true
+            CodeHookSpecification:
+              LambdaCodeHook:
+                CodeHookInterfaceVersion: "1.0"
+                LambdaArn: !GetAtt CaptureFunction.Arn
+
+  CaptureFromLex:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CaptureFunction
+      Action: lambda:InvokeFunction
+      Principal: lexv2.amazonaws.com
+      SourceArn: !GetAtt BotAlias.Arn
+
+  BotIntegration:
+    Type: AWS::Connect::IntegrationAssociation
+    Properties:
+      InstanceId: !GetAtt Instance.Arn
+      IntegrationType: LEX_BOT
+      IntegrationArn: !GetAtt BotAlias.Arn
+
+  # ------------------------------------------------------------------ contact flows
+  # Outbound: CallAssist's side of the conversation, one turn at a time.
+  AssistantFlow:
+    Type: AWS::Connect::ContactFlow
+    DependsOn: [TurnIntegration, BotIntegration]
+    Properties:
+      InstanceArn: !GetAtt Instance.Arn
+      Name: CallAssist conversation
+      Type: CONTACT_FLOW
+      Description: Speaks CallAssist's lines and listens with Lex until CallAssist says end
+      Content: !Sub |
+        {
+          "Version": "2019-10-30",
+          "StartAction": "voice",
+          "Actions": [
+            { "Identifier": "voice", "Type": "UpdateContactTextToSpeechVoice",
+              "Parameters": { "TextToSpeechVoice": "${Voice}", "TextToSpeechEngine": "Neural" },
+              "Transitions": { "NextAction": "answered" } },
+            { "Identifier": "answered", "Type": "InvokeLambdaFunction",
+              "Parameters": { "LambdaFunctionARN": "${TurnFunction.Arn}", "InvocationTimeLimitSeconds": "8",
+                "LambdaInvocationAttributes": { "event": "answered" }, "ResponseValidation": { "ResponseType": "STRING_MAP" } },
+              "Transitions": { "NextAction": "isEnd", "Errors": [ { "NextAction": "oops", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "isEnd", "Type": "Compare",
+              "Parameters": { "ComparisonValue": "$.External.end" },
+              "Transitions": { "NextAction": "listen",
+                "Conditions": [ { "NextAction": "lastLine", "Condition": { "Operator": "Equals", "Operands": [ "true" ] } } ],
+                "Errors": [ { "NextAction": "listen", "ErrorType": "NoMatchingCondition" } ] } },
+            { "Identifier": "listen", "Type": "ConnectParticipantWithLexBot",
+              "Parameters": { "Text": "$.External.say", "LexV2Bot": { "AliasArn": "${BotAlias.Arn}" } },
+              "Transitions": { "NextAction": "heard",
+                "Errors": [ { "NextAction": "heard", "ErrorType": "NoMatchingCondition" }, { "NextAction": "heard", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "heard", "Type": "InvokeLambdaFunction",
+              "Parameters": { "LambdaFunctionARN": "${TurnFunction.Arn}", "InvocationTimeLimitSeconds": "8",
+                "LambdaInvocationAttributes": { "event": "heard", "text": "$.Lex.SessionAttributes.transcript" }, "ResponseValidation": { "ResponseType": "STRING_MAP" } },
+              "Transitions": { "NextAction": "isEnd", "Errors": [ { "NextAction": "oops", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "lastLine", "Type": "MessageParticipant",
+              "Parameters": { "Text": "$.External.say" },
+              "Transitions": { "NextAction": "bye", "Errors": [ { "NextAction": "bye", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "oops", "Type": "MessageParticipant",
+              "Parameters": { "Text": "Sorry, something went wrong on my side. I'll call back later. Goodbye." },
+              "Transitions": { "NextAction": "bye", "Errors": [ { "NextAction": "bye", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "bye", "Type": "DisconnectParticipant", "Parameters": {}, "Transitions": {} }
+          ]
+        }
+
+  # Inbound on the worker line: put the call in the volunteers' queue.
+  WorkerLineFlow:
+    Type: AWS::Connect::ContactFlow
+    Properties:
+      InstanceArn: !GetAtt Instance.Arn
+      Name: CallAssist test worker line
+      Type: CONTACT_FLOW
+      Description: Routes calls on the test worker line to volunteers in the softphone
+      Content: !Sub |
+        {
+          "Version": "2019-10-30",
+          "StartAction": "queue",
+          "Actions": [
+            { "Identifier": "queue", "Type": "UpdateContactTargetQueue",
+              "Parameters": { "QueueId": "${WorkersQueue.QueueArn}" },
+              "Transitions": { "NextAction": "transfer", "Errors": [ { "NextAction": "bye", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "transfer", "Type": "TransferContactToQueue", "Parameters": {},
+              "Transitions": { "NextAction": "bye",
+                "Errors": [ { "NextAction": "bye", "ErrorType": "QueueAtCapacity" }, { "NextAction": "bye", "ErrorType": "NoMatchingError" } ] } },
+            { "Identifier": "bye", "Type": "DisconnectParticipant", "Parameters": {}, "Transitions": {} }
+          ]
+        }
+
+  # CloudFormation can't link a number to a flow, so a tiny custom resource does it.
+  AssociateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: associate-number
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [connect:AssociatePhoneNumberContactFlow, connect:DisassociatePhoneNumberContactFlow]
+                Resource: "*"
+
+  AssociateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Links a Connect phone number to a contact flow (custom resource)
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt AssociateRole.Arn
+      Code:
+        ZipFile: |
+          const { ConnectClient, AssociatePhoneNumberContactFlowCommand, DisassociatePhoneNumberContactFlowCommand } = require("@aws-sdk/client-connect");
+          const connect = new ConnectClient({});
+          async function reply(event, status, reason) {
+            await fetch(event.ResponseURL, { method: "PUT", body: JSON.stringify({ Status: status, Reason: reason || "see logs", PhysicalResourceId: event.LogicalResourceId, StackId: event.StackId, RequestId: event.RequestId, LogicalResourceId: event.LogicalResourceId }) });
+          }
+          exports.handler = async (event) => {
+            const p = event.ResourceProperties;
+            try {
+              if (event.RequestType === "Delete") {
+                await connect.send(new DisassociatePhoneNumberContactFlowCommand({ PhoneNumberId: p.PhoneNumberId, InstanceId: p.InstanceId })).catch(() => {});
+              } else {
+                await connect.send(new AssociatePhoneNumberContactFlowCommand({ PhoneNumberId: p.PhoneNumberId, InstanceId: p.InstanceId, ContactFlowId: p.ContactFlowId }));
+              }
+              await reply(event, "SUCCESS");
+            } catch (e) {
+              console.log(e);
+              await reply(event, "FAILED", String(e).slice(0, 200));
+            }
+          };
+
+  WorkerLineAssociation:
+    Type: Custom::PhoneNumberFlow
+    Properties:
+      ServiceToken: !GetAtt AssociateFunction.Arn
+      InstanceId: !GetAtt Instance.Id
+      PhoneNumberId: !Select [1, !Split ["phone-number/", !Ref WorkerLineNumber]]
+      ContactFlowId: !Select [3, !Split ["/", !Ref WorkerLineFlow]]
+
+  # Settings the CallAssist server reads at start-up.
+  InstanceIdParam:
+    Type: AWS::SSM::Parameter
+    Properties: { Name: /callassist/connect/instance-id, Type: String, Value: !GetAtt Instance.Id }
+  FlowIdParam:
+    Type: AWS::SSM::Parameter
+    Properties: { Name: /callassist/connect/contact-flow-id, Type: String, Value: !Select [3, !Split ["/", !Ref AssistantFlow]] }
+  SourceNumberParam:
+    Type: AWS::SSM::Parameter
+    Properties: { Name: /callassist/connect/source-number, Type: String, Value: !GetAtt CallerNumber.Address }
+
+Outputs:
+  InstanceId:
+    Value: !GetAtt Instance.Id
+  InstanceArn:
+    Value: !GetAtt Instance.Arn
+  AssistantFlowId:
+    Description: CONNECT_CONTACT_FLOW_ID for the CallAssist server
+    Value: !Select [3, !Split ["/", !Ref AssistantFlow]]
+  CallerNumber:
+    Description: CONNECT_SOURCE_NUMBER for the CallAssist server
+    Value: !GetAtt CallerNumber.Address
+  WorkerLineNumber:
+    Description: Put this number on test contacts with "line":"connect" (data/local/contacts.json)
+    Value: !GetAtt WorkerLineNumber.Address
+  SoftphoneUrl:
+    Description: Volunteers log in here to answer the worker line
+    Value: !Sub https://${InstanceAlias}.my.connect.aws/ccp-v2/

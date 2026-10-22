@@ -13,6 +13,7 @@ import { AlexaAccount, AlexaBrain, type AlexaAuthOptions, type McpTraffic } from
 import type { AuthServer } from "./auth.js";
 import { Metrics, rateLimit } from "./ops.js";
 import type { LocalOutbox } from "./email.js";
+import type { ConnectTelephony } from "./connect.js";
 import { LocalTts, VOICES } from "./tts.js";
 
 export interface AppOptions {
@@ -26,6 +27,8 @@ export interface AppOptions {
   allowedHosts?: string[];
   /** Browser Origins accepted on /mcp; requests with any other Origin get 403. Empty = allow all. */
   allowedOrigins?: string[];
+  /** Behind CloudFront: take the caller's IP from X-Forwarded-For (one proxy hop). */
+  trustProxy?: boolean;
   log?: (e: Record<string, unknown>) => void;
   /** OAuth for /mcp and /agent/mcp. Off when undefined (tests, quick hacking). */
   auth?: AuthServer;
@@ -37,6 +40,8 @@ export interface AppOptions {
   accountFor?: (sub: string) => Assistant | undefined;
   /** How the emulator signs in (as Alexa+ would). Needed when auth is on. */
   alexaAuth?: AlexaAuthOptions;
+  /** Amazon Connect line, when configured: its contact-flow Lambda posts each turn to /connect/turn. */
+  connect?: ConnectTelephony;
   /** Local email outbox, shown on the console. */
   outbox?: LocalOutbox;
   /** Write CloudWatch EMF metric lines to the log. */
@@ -115,7 +120,7 @@ export function createApp(opts: AppOptions) {
   const counted = new Set<string>();
   const lastStatus = new Map<string, string>();
   const app = express();
-  app.set("trust proxy", "loopback");
+  app.set("trust proxy", opts.trustProxy ? 1 : "loopback");
   app.disable("x-powered-by");
   app.use(express.json({ limit: "100kb" }));
 
@@ -161,6 +166,17 @@ export function createApp(opts: AppOptions) {
   app.delete("/mcp", methodNotAllowed);
   app.post("/agent/mcp", hostGuard, agentAuth, (req, res) => void serveMcp(() => createAgentMcpServer(assistant), req, res));
   app.get("/agent/mcp", methodNotAllowed);
+
+  // Amazon Connect contact flow → Lambda → here, once per turn of the conversation.
+  app.post("/connect/turn", agentAuth, (req, res) => {
+    if (!opts.connect) return void res.status(404).json({ error: "Amazon Connect line not configured" });
+    const callId = typeof req.body?.callId === "string" ? req.body.callId : "";
+    const event = req.body?.event;
+    const text = typeof req.body?.text === "string" ? req.body.text.slice(0, 500) : "";
+    if (!callId || !["answered", "heard", "hangup"].includes(event)) return void res.status(400).json({ error: "callId and event (answered|heard|hangup) required" });
+    if (!store.calls.get(callId)) return void res.json({ say: "Sorry, this call has ended. Goodbye.", end: true });
+    res.json(opts.connect.turn(callId, event, text));
+  });
 
   // ---------------------------------------------------------------- state + live events
   app.get("/api/state", (_req, res) => res.json(publicState(store, assistant)));

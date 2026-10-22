@@ -1,0 +1,325 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CallAssist server on one EC2 instance (Docker), behind CloudFront for HTTPS. No SSH: access
+  and deploys go through AWS Systems Manager. Port 8787 is open only to CloudFront.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues: [t4g.small, t4g.medium]
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+  CloudFrontPrefixList:
+    Type: String
+    Default: pl-3b927c52
+    Description: Managed prefix list com.amazonaws.global.cloudfront.origin-facing (us-east-1).
+  ConnectInstanceArn:
+    Type: String
+    Default: ""
+    Description: Amazon Connect instance ARN (from the connect stack). Empty = local demo phones only.
+  AlertEmail:
+    Type: String
+    Description: Where alarms are emailed.
+
+Conditions:
+  HasConnect: !Not [!Equals [!Ref ConnectInstanceArn, ""]]
+
+Resources:
+  # ------------------------------------------------------------------ network
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: callassist }, { Key: project, Value: callassist }]
+
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: project, Value: callassist }]
+
+  IgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw }
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: callassist-public }, { Key: project, Value: callassist }]
+
+  PublicRoutes:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: project, Value: callassist }]
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties: { RouteTableId: !Ref PublicRoutes, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw }
+
+  PublicSubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnet, RouteTableId: !Ref PublicRoutes }
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CallAssist - port 8787 from CloudFront only, no SSH
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 8787, ToPort: 8787, SourcePrefixListId: !Ref CloudFrontPrefixList, Description: CloudFront origin-facing }
+      SecurityGroupEgress:
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS to AWS APIs and ECR }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: OS package updates }
+      Tags: [{ Key: project, Value: callassist }]
+
+  # ------------------------------------------------------------------ container registry
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: callassist
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: { ScanOnPush: true }
+      EncryptionConfiguration: { EncryptionType: AES256 }
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          { "rules": [ { "rulePriority": 1, "description": "keep the last 15 images",
+            "selection": { "tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 15 },
+            "action": { "type": "expire" } } ] }
+      Tags: [{ Key: project, Value: callassist }]
+
+  # ------------------------------------------------------------------ config and secrets
+  PublicUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /callassist/public-url
+      Type: String
+      Value: !Sub https://${Cdn.DomainName}
+      Description: Public HTTPS URL of CallAssist (CloudFront)
+
+  ImageTagParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /callassist/image-tag
+      Type: String
+      Value: none
+      Description: Image tag currently deployed (updated by the pipeline)
+
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: callassist/app
+      Description: JWT signing key and OAuth client secrets for CallAssist
+      GenerateSecretString:
+        SecretStringTemplate: '{"note":"Master key. OAuth client secrets are derived from it (HMAC-SHA256)."}'
+        GenerateStringKey: jwt
+        PasswordLength: 48
+        ExcludePunctuation: true
+      Tags: [{ Key: project, Value: callassist }]
+
+  # ------------------------------------------------------------------ instance role (least privilege)
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: callassist-runtime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [ecr:GetAuthorizationToken]
+                Resource: "*"
+              - Effect: Allow
+                Action: [ecr:BatchGetImage, ecr:GetDownloadUrlForLayer, ecr:BatchCheckLayerAvailability]
+                Resource: !GetAtt Repository.Arn
+              - Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath, ssm:PutParameter]
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/callassist
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/callassist/*
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource: !Ref AppSecrets
+              - !If
+                - HasConnect
+                - Effect: Allow
+                  Action: [connect:StartOutboundVoiceContact, connect:StopContact]
+                  Resource: [!Ref ConnectInstanceArn, !Sub "${ConnectInstanceArn}/contact/*", !Sub "${ConnectInstanceArn}/contact-flow/*"]
+                - !Ref AWS::NoValue
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref InstanceRole] }
+
+  # ------------------------------------------------------------------ the server
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref AppSecurityGroup]
+      MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 2, HttpEndpoint: enabled }
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      Tags: [{ Key: Name, Value: callassist }, { Key: project, Value: callassist }, { Key: role, Value: callassist-app }]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          dnf install -y docker amazon-cloudwatch-agent jq
+          systemctl enable --now docker
+          mkdir -p /opt/callassist /var/lib/callassist
+          cat > /opt/callassist/deploy.sh <<'DEPLOY'
+          #!/bin/bash
+          # Usage: deploy.sh <image-tag>. Pulls, swaps containers, health-checks, rolls back on failure.
+          set -euo pipefail
+          TAG="$1"
+          REGION="${AWS::Region}"
+          REPO="${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/callassist"
+          PREV=$(aws ssm get-parameter --region "$REGION" --name /callassist/image-tag --query Parameter.Value --output text || echo none)
+          aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+          docker pull "$REPO:$TAG"
+          run() {
+            URL=$(aws ssm get-parameter --region "$REGION" --name /callassist/public-url --query Parameter.Value --output text)
+            SECRET=$(aws secretsmanager get-secret-value --region "$REGION" --secret-id callassist/app --query SecretString --output text | jq -r .jwt)
+            # Connect settings written by the connect stack (empty until it exists).
+            aws ssm get-parameters-by-path --region "$REGION" --path /callassist/connect --query 'Parameters[].[Name,Value]' --output text \
+              | awk '{n=$1; sub(".*/","",n); gsub("-","_",n); print "CONNECT_" toupper(n) "=" $2}' > /opt/callassist/connect.env || true
+            docker rm -f callassist >/dev/null 2>&1 || true
+            docker run -d --name callassist --restart unless-stopped -p 8787:8787 \
+              -v /var/lib/callassist:/app/server/data/local \
+              --env-file /opt/callassist/connect.env \
+              -e HOST=0.0.0.0 -e PORT=8787 -e PUBLIC_URL="$URL" -e AWS_REGION="$REGION" -e TRUST_PROXY=1 \
+              -e MASTER_SECRET="$SECRET" \
+              --log-driver awslogs --log-opt awslogs-region="$REGION" --log-opt awslogs-group=/callassist/app --log-opt awslogs-create-group=true \
+              "$REPO:$1"
+          }
+          run "$TAG"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/healthz >/dev/null; then
+              aws ssm put-parameter --region "$REGION" --name /callassist/image-tag --value "$TAG" --overwrite >/dev/null
+              echo "deployed $TAG"; exit 0
+            fi
+            sleep 2
+          done
+          echo "health check failed for $TAG, rolling back to $PREV" >&2
+          if [ "$PREV" != "none" ]; then run "$PREV"; fi
+          exit 1
+          DEPLOY
+          chmod +x /opt/callassist/deploy.sh
+          chown 1000:1000 /var/lib/callassist
+          touch /opt/callassist/connect.env
+
+  ServerIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Server
+      Tags: [{ Key: project, Value: callassist }]
+
+  # ------------------------------------------------------------------ HTTPS in front
+  Cdn:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: CallAssist
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: app
+            DomainName: !Sub
+              - ec2-${Dashed}.compute-1.amazonaws.com
+              - Dashed: !Join ["-", !Split [".", !Ref ServerIp]]
+            CustomOriginConfig:
+              HTTPPort: 8787
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: app
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # AllViewerExceptHostHeader
+      Tags: [{ Key: project, Value: callassist }]
+
+  # ------------------------------------------------------------------ alerts
+  Alerts:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: callassist-alerts
+      Subscription: [{ Protocol: email, Endpoint: !Ref AlertEmail }]
+
+  InstanceDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CallAssist server failed its status checks
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed
+      Dimensions: [{ Name: InstanceId, Value: !Ref Server }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref Alerts]
+
+  OriginErrors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Many 5xx errors from CallAssist through CloudFront
+      Namespace: AWS/CloudFront
+      MetricName: 5xxErrorRate
+      Dimensions: [{ Name: DistributionId, Value: !Ref Cdn }, { Name: Region, Value: Global }]
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Alerts]
+
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: callassist-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 50, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 40 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+
+Outputs:
+  PublicUrl:
+    Value: !Sub https://${Cdn.DomainName}
+  InstanceId:
+    Value: !Ref Server
+  RepositoryUri:
+    Value: !GetAtt Repository.RepositoryUri
+  AppSecretArn:
+    Value: !Ref AppSecrets

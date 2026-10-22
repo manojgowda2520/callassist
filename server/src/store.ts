@@ -25,6 +25,8 @@ export interface Contact {
   consentRecord?: { at: string; method: string; wording: string };
   /** When they asked not to be called again. */
   optedOutAt?: string;
+  /** Which phone line reaches them: the local demo phones (default), Amazon Connect (US) or the SIP bridge (India). */
+  line?: "local" | "connect" | "sip";
 }
 
 /** The business responsible for the calls (47 CFR 64.1200(b)). */
@@ -151,8 +153,18 @@ export class Store {
     if (file && existsSync(file)) this.load(file);
   }
 
-  static fromFile(seedPath: string, dataFile?: string): Store {
-    return new Store(JSON.parse(readFileSync(seedPath, "utf8")), dataFile);
+  static fromFile(seedPath: string, dataFile?: string, contactsOverride?: string): Store {
+    const seed: SeedData = JSON.parse(readFileSync(seedPath, "utf8"));
+    // Real volunteer numbers live in a git-ignored file, never in the repo.
+    if (contactsOverride && existsSync(contactsOverride)) {
+      const extra: Contact[] = JSON.parse(readFileSync(contactsOverride, "utf8"));
+      for (const c of extra) {
+        const i = seed.contacts.findIndex((x) => x.id === c.id);
+        if (i >= 0) seed.contacts[i] = { ...seed.contacts[i], ...c };
+        else seed.contacts.push({ ...c, aliases: c.aliases ?? [], optedOut: c.optedOut ?? false });
+      }
+    }
+    return new Store(seed, dataFile);
   }
 
   subscribe(fn: (e: StoreEvent) => void): () => void {

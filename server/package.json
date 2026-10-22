@@ -15,6 +15,7 @@
     "build:ui": "npm run build:host && npm run build:view"
   },
   "dependencies": {
+    "@aws-sdk/client-connect": "^3.1155.0",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "express": "^5.3.0",

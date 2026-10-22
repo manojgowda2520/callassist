@@ -1,0 +1,9 @@
+.git
+**/node_modules
+server/data/local
+handoff
+docs
+infra
+.github
+*.md
+!skills/**/*.md
