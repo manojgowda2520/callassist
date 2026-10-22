@@ -16,7 +16,7 @@ Sources:
 
 **Decision:** the server speaks 2025-11-25 and negotiates down to 2025-03-26 when that's what the client sends. Newer features turn on only when the client declares them:
 
-| Feature | When the client declares it (our simulator, Claude) | When it doesn't (Alexa+ as documented) |
+| Feature | When the client declares it (our emulator, MCP Inspector) | When it doesn't (Alexa+ as documented) |
 | --- | --- | --- |
 | Tasks (long-running calls) | `request_quotes` or `call_contact` returns a task; the client polls `tasks/get` | The tool returns right away with an `errandId`; the client calls `get_call_status` |
 | Elicitation (confirm, missing details) | A form asks for name and phone, or for Confirm | A two-step tool call: the first returns a read-back, the second carries `confirmed: true` |

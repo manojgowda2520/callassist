@@ -203,7 +203,7 @@ Legend: **Yes / Partly / No / Unknown** = does CallAssist already do it.
 | S10 | Phone-agent tools (`/agent/mcp`) need their own auth, never the user's | [MCP security best practices](https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices), [Connect MCP integration](https://docs.aws.amazon.com/connect/latest/adminguide/3p-apps-mcp-server.html) | **No.** Open endpoint. Anyone who learns a `callId` can call `report_outcome` | On AWS: Gateway JWT, gateway ID in *Allowed audiences*. Locally: shared secret header |
 | S11 | Least privilege scopes; no wildcard scopes | [MCP security best practices (scope minimization)](https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices) | **Unknown** (not built) | Only `mcp:service` and `mcp:tools` |
 | S12 | Do not leak internals in errors | [DESIGN_GUIDELINES.md](https://github.com/awslabs/mcp/blob/main/DESIGN_GUIDELINES.md), [FR §2](https://developer.amazon.com/docs/alexaplus/add-ons/functional-requirements.html) | **Yes** ("Something went wrong on my side") | None |
-| S13 | Secrets: none in repo; Secrets Manager; IAM roles not keys; OIDC deploy | [AWS agentic AI security guide](https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-security/introduction.html), `CLAUDE.md` | **Partly** (policy decided, infra not built) | Follow through in CloudFormation |
+| S13 | Secrets: none in repo; Secrets Manager; IAM roles not keys; OIDC deploy | [AWS agentic AI security guide](https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-security/introduction.html), project ground rules | **Partly** (policy decided, infra not built) | Follow through in CloudFormation |
 | S14 | Unbounded consumption (LLM10): rate limits, call caps, budgets | [OWASP](https://genai.owasp.org/llm-top-10/) | **Partly.** `maxActiveCalls`, `maxAttempts: 2`. No per-day or per-user cap | Daily cap per user and per contact (gap 3); AWS Budgets alerts already planned |
 | S15 | `/api/state` and similar console endpoints expose phone numbers | OWASP LLM02 sensitive info disclosure ([OWASP](https://genai.owasp.org/llm-top-10/)) | **No.** `publicState()` includes full `phone` | Remove from any internet-facing deploy, or mask to last 2 digits |
 
@@ -222,7 +222,7 @@ Legend: **Yes / Partly / No / Unknown** = does CallAssist already do it.
 | R9 | Traces and metrics: AgentCore built-in metrics; ADOT for traces | [Observability configure](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html) | **No** | Enable CloudWatch Transaction Search; one dashboard; 3 alarms |
 | R10 | Timeouts configurable, with clear error and cleanup | [DESIGN_GUIDELINES.md](https://github.com/awslabs/mcp/blob/main/DESIGN_GUIDELINES.md) | **Partly.** `waitSeconds` cap 25 | Add a hard server-side timeout per tool |
 | R11 | Quotas known and raised early (10 concurrent calls, 2 API req/s) | `handoff/HANDOFF.md` §5 (not independently checked) | **Partly.** `maxActiveCalls` exists | Match it to the real Connect quota |
-| R12 | Never delete the Connect stack | `CLAUDE.md` | **Yes** (rule in place) | `DeletionPolicy: Retain` |
+| R12 | Never delete the Connect stack | Project ground rules | **Yes** (rule in place) | `DeletionPolicy: Retain` |
 
 ### 5.5 Testing
 
