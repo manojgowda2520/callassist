@@ -135,7 +135,8 @@ Resources:
       Code:
         ZipFile: |
           const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
-          const sm = new SecretsManagerClient({});
+          // The app secret may live in another region than this Lambda: use the region in its ARN.
+          const sm = new SecretsManagerClient({ region: process.env.AGENT_SECRET_ARN.split(":")[3] });
           let secret, token, tokenExp = 0;
           async function getToken() {
             if (token && Date.now() < tokenExp - 60000) return token;

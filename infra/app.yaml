@@ -159,7 +159,7 @@ Resources:
                 - HasConnect
                 - Effect: Allow
                   Action: [connect:StartOutboundVoiceContact, connect:StartWebRTCContact, connect:StopContact]
-                  Resource: [!Ref ConnectInstanceArn, !Sub "${ConnectInstanceArn}/contact/*", !Sub "${ConnectInstanceArn}/contact-flow/*"]
+                  Resource: [!Ref ConnectInstanceArn, !Sub "${ConnectInstanceArn}/contact/*", !Sub "${ConnectInstanceArn}/contact-flow/*", !Sub "${ConnectInstanceArn}/*", !Sub "arn:aws:connect:*:${AWS::AccountId}:phone-number/*"]
                 - !Ref AWS::NoValue
 
   InstanceProfile:

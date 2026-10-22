@@ -27,7 +27,8 @@ const phone = new LocalPhoneNetwork();
 const connectApi =
   process.env.CONNECT_INSTANCE_ID && process.env.CONNECT_CONTACT_FLOW_ID
     ? awsConnectApi({
-        region: process.env.AWS_REGION ?? "us-east-1",
+        // The Connect instance may live in another region than the server (e.g. us-west-2).
+        region: process.env.CONNECT_REGION ?? process.env.AWS_REGION ?? "us-east-1",
         instanceId: process.env.CONNECT_INSTANCE_ID,
         contactFlowId: process.env.CONNECT_CONTACT_FLOW_ID,
         sourcePhoneNumber: process.env.CONNECT_SOURCE_NUMBER ?? "",
