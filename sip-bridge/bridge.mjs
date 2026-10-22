@@ -8,7 +8,7 @@
 // (Transcribe). Asterisk only dials through the callassist-test context, which
 // allows the consenting test numbers and nothing else.
 //
-// Needs Node 22+ (built-in WebSocket and fetch). Config: environment variables,
+// Needs Node 22+, or Node 20.10+ started with --experimental-websocket (built-in WebSocket and fetch). Config: environment variables,
 // see bridge.env.example.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
@@ -37,6 +37,11 @@ function must(name) {
     process.exit(2);
   }
   return v;
+}
+
+if (typeof WebSocket === "undefined") {
+  console.error("This Node.js has no built-in WebSocket. Use Node 22+, or start with: node --experimental-websocket bridge.mjs (Node 20.10+).");
+  process.exit(2);
 }
 
 const log = (event, extra = {}) => console.log(JSON.stringify({ at: new Date().toISOString(), event, ...extra }));

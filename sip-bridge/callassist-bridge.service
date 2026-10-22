@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 EnvironmentFile=/etc/callassist-bridge.env
-ExecStart=/usr/bin/node /opt/callassist-bridge/bridge.mjs
+# --experimental-websocket gives Node 20.10+ the built-in WebSocket (Node 22+ has it already; the flag is harmless there).
+ExecStart=/usr/bin/node --experimental-websocket /opt/callassist-bridge/bridge.mjs
 Restart=always
 RestartSec=3
 # Runs as root so it can write Asterisk's sound folder; change to the asterisk user if your folders allow it.

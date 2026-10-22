@@ -41,7 +41,7 @@ CallAssist ◄── /sip/turn · /sip/tts · /sip/stt ── bridge   (speak, r
 
 ## Install the bridge
 
-Needs Node.js 22 or later.
+Needs Node.js 22+, or Node 20.10+ (the service file starts it with `--experimental-websocket`).
 
 ```bash
 mkdir -p /opt/callassist-bridge
