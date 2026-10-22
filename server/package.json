@@ -9,9 +9,13 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:host": "esbuild scripts/host-entry.js --bundle --format=esm --minify --platform=browser --outfile=public/static/vendor/mcp-apps-host.js",
+    "build:view": "esbuild scripts/view-entry.js --bundle --format=iife --global-name=McpApps --minify --platform=browser --outfile=src/ui/vendor/mcp-apps-view.js",
+    "build:ui": "npm run build:host && npm run build:view"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "express": "^5.3.0",
     "zod": "^4.6.7"
@@ -19,6 +23,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
+    "esbuild": "^0.25.12",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

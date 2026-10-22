@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallAssist</title>
+<style>
+  :root { --bg: transparent; --card: rgba(255,255,255,.06); --line: rgba(255,255,255,.12); --ink: #eef3fb; --ink2: #9fb0c8; --ink3: #6f83a0; --cyan: #1ec8f0; --blue: #0a7cff; --green: #2ed47a; --amber: #ffcf33; --red: #ff6b61; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
+  :root[data-theme="light"] { --card: #fff; --line: #e3e6eb; --ink: #14161a; --ink2: #4a505b; --ink3: #8a909b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  body { padding: 2px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .eyebrow { font-size: 11.5px; letter-spacing: .8px; text-transform: uppercase; font-weight: 700; color: #8fb4e8; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .eyebrow .live { color: var(--ink3); font-weight: 600; letter-spacing: .3px; text-transform: none; }
+  .eyebrow .live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: 1px; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .head { display: flex; gap: 12px; align-items: center; }
+  .ava { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #0b0c0f; background: linear-gradient(135deg, #7fd8ff, #b7a6ff); flex: none; }
+  .title { font-size: 17px; font-weight: 700; line-height: 1.25; }
+  .sub { color: var(--ink2); font-size: 13.5px; margin-top: 2px; }
+  .pill { margin-left: auto; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .pill.blue { background: #2f6fe433; color: #9cc0ff; } .pill.green { background: #15a46a33; color: #7ee2b5; } .pill.amber { background: #d98a0633; color: #ffd27a; }
+  .pill.teal { background: #0f9fa333; color: #7fe3e5; } .pill.red { background: #d8433b33; color: #ffaaa4; } .pill.gray { background: #ffffff1a; color: #c9d2de; }
+  .steps { display: flex; align-items: center; gap: 6px; margin: 14px 0 4px; }
+  .step { flex: 1; height: 5px; border-radius: 5px; background: var(--line); position: relative; }
+  .step.on { background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+  .step.warn { background: var(--amber); } .step.bad { background: var(--red); }
+  .steplabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink3); }
+  .quote { margin-top: 12px; font-size: 14.5px; padding: 10px 12px; border-radius: 12px; background: rgba(30,200,240,.08); border-left: 3px solid var(--cyan); }
+  .rows { margin-top: 6px; }
+  .row { display: flex; gap: 10px; font-size: 14px; padding: 5px 0; }
+  .row b { color: var(--ink2); font-weight: 500; min-width: 74px; }
+  .timeline { margin-top: 10px; max-height: 120px; overflow: auto; font-size: 12.5px; color: var(--ink2); border-top: 1px solid var(--line); padding-top: 8px; }
+  .timeline div { padding: 2px 0; }
+  .timeline i { font-style: normal; color: var(--ink3); margin-right: 6px; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 12px; font-weight: 700; font-size: 14px; flex: 1; }
+  .primary { background: var(--cyan); color: #04202a; } .ghost { background: rgba(255,255,255,.1); color: var(--ink); } .danger { background: #ff6b6126; color: #ffaaa4; }
+  button:disabled { opacity: .5; cursor: default; }
+  .carousel { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: thin; }
+  .tile { scroll-snap-align: start; flex: 0 0 168px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; cursor: pointer; text-align: left; color: var(--ink); font-weight: 400; }
+  .tile:hover { border-color: var(--cyan); }
+  .tile .t { font-weight: 700; font-size: 14px; margin: 8px 0 4px; line-height: 1.25; }
+  .tile .s { font-size: 12.5px; color: var(--ink2); }
+  .tile.off { opacity: .45; cursor: default; }
+  .note { font-size: 12px; color: var(--ink3); margin-top: 8px; }
+  .err { color: #ffaaa4; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="root"><div class="card"><div class="sub">Loading…</div></div></div>
+<script>/*__MCP_APPS_VIEW__*/</script>
+<script>
+(() => {
+  const { App, applyDocumentTheme } = window.McpApps;
+  const app = new App({ name: "CallAssist card", version: "1.0.0" }, {}, { autoResize: true });
+  const root = document.getElementById("root");
+  const STATUS = { calling: ["Calling", "blue"], accepted: ["On it", "green"], blocked: ["Needs you", "amber"], done: ["Done", "teal"], declined: ["Declined", "red"], unreachable: ["No answer", "red"], cancelled: ["Cancelled", "gray"] };
+  const OPEN = ["calling", "accepted", "blocked"];
+  let input = {};
+  let poll = null;
+
+  const h = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+    return n;
+  };
+  const initials = (n) => (n || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const pill = (s) => { const [l, t] = STATUS[s] || [s, "gray"]; return h("span", { class: `pill ${t}` }, l); };
+  const show = (node) => { root.replaceChildren(node); };
+
+  async function call(name, args) {
+    try {
+      const r = await app.callServerTool({ name, arguments: args });
+      return r.structuredContent || {};
+    } catch (e) {
+      return { speech: "Couldn't reach CallAssist. Try again.", reason: "error" };
+    }
+  }
+
+  function render(d) {
+    clearInterval(poll);
+    poll = null;
+    if (!d) return;
+    if (d.needsConfirmation) return show(confirmCard(d));
+    if (d.taskId) {
+      show(taskCard(d));
+      if (OPEN.includes(d.status)) poll = setInterval(async () => render(await call("get_task_status", { taskId: d.taskId })), 2500);
+      return;
+    }
+    if (Array.isArray(d.tasks)) return show(tasksCarousel(d));
+    if (Array.isArray(d.contacts) && d.contacts.length) return show(teamCarousel(d));
+    if (Array.isArray(d.errands) && d.errands.length) return show(errandTiles(d));
+    show(h("div", { class: "card" }, h("div", { class: "title" }, d.speech || "")));
+  }
+
+  function confirmCard(d) {
+    const rows = [["Who", d.person && `${d.person}${d.personRole ? " · " + d.personRole : ""}`], ["Task", d.task || d.errand || (d.tool === "cancel_task" ? d.title : undefined)], ["When", d.due], ["Message", d.message], ["Ask", d.question], ["Note", d.afterHours]].filter(([, v]) => v);
+    const status = h("div", { class: "note" }, "Nothing happens until you confirm.");
+    const yes = h("button", { class: "primary", onclick: async () => {
+      yes.disabled = no.disabled = true;
+      status.textContent = "Confirming…";
+      const { confirmed, confirmationToken, ...rest } = input;
+      render(await call(d.tool, { ...rest, confirmed: true, confirmationToken: d.confirmationToken }));
+    } }, d.tool === "cancel_task" ? "Yes, cancel it" : "Confirm call");
+    const no = h("button", { class: "ghost", onclick: () => show(h("div", { class: "card" }, h("div", { class: "sub" }, "Okay, nothing was sent."))) }, "Not now");
+    return h("div", { class: "card" },
+      h("div", { class: "eyebrow" }, d.tool === "cancel_task" ? "Cancel task?" : "Read-back"),
+      h("div", { class: "rows" }, ...rows.map(([k, v]) => h("div", { class: "row" }, h("b", {}, k), h("span", {}, v)))),
+      h("div", { class: "btns" }, yes, no), status);
+  }
+
+  function taskCard(t) {
+    const stage = { calling: 1, accepted: 2, blocked: 2, done: 3, declined: 3, unreachable: 3, cancelled: 3 }[t.status] || 1;
+    const bad = ["declined", "unreachable", "cancelled"].includes(t.status);
+    const stepCls = (i) => (i <= stage ? (bad && i === 3 ? "step bad" : t.status === "blocked" && i === 2 ? "step warn" : "step on") : "step");
+    const open = OPEN.includes(t.status);
+    const msg = h("div", { class: "err" });
+    const act = async (fn) => { const r = await fn(); if (r.reason && r.reason !== "confirmation_missing" && !r.needsConfirmation) msg.textContent = r.speech; else render(r); };
+    return h("div", { class: "card" },
+      h("div", { class: "eyebrow" }, t.kind === "message" ? "Message" : t.kind === "errand" ? "Errand" : "Task", open ? h("span", { class: "live" }, t.onCall === "in_progress" ? "on the phone" : t.onCall ? "ringing" : "live") : null),
+      h("div", { class: "head" }, h("div", { class: "ava" }, initials(t.person)), h("div", { style: "min-width:0" }, h("div", { class: "title" }, t.title), h("div", { class: "sub" }, [t.person, t.eta || (t.due && `needed ${t.due}`)].filter(Boolean).join(" · "))), pill(t.status)),
+      h("div", { class: "steps" }, h("div", { class: stepCls(1) }), h("div", { class: stepCls(2) }), h("div", { class: stepCls(3) })),
+      h("div", { class: "steplabels" }, h("span", {}, "Calling"), h("span", {}, t.status === "blocked" ? "Needs you" : "On it"), h("span", {}, bad ? STATUS[t.status][0] : "Done")),
+      t.reply ? h("div", { class: "quote" }, `“${t.reply}”`) : null,
+      t.updates && t.updates.length ? h("div", { class: "timeline" }, ...t.updates.slice(-5).map((u) => h("div", {}, h("i", {}, new Date(u.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })), `${u.from === "worker" ? t.person : u.from === "assistant" ? "CallAssist" : u.from === "user" ? "You" : "•"}: ${u.text}`))) : null,
+      open ? h("div", { class: "btns" },
+        h("button", { class: "ghost", onclick: () => act(() => call("follow_up", { taskId: t.taskId })) }, "Follow up now"),
+        h("button", { class: "danger", onclick: () => { input = { taskId: t.taskId }; act(() => call("cancel_task", { taskId: t.taskId })); } }, "Cancel")) : null,
+      msg);
+  }
+
+  function tasksCarousel(d) {
+    if (!d.tasks.length) return h("div", { class: "card" }, h("div", { class: "eyebrow" }, "Tasks"), h("div", { class: "title" }, "All clear"), h("div", { class: "sub" }, "Nothing pending."));
+    return h("div", {},
+      h("div", { class: "eyebrow" }, `Tasks · ${d.total ?? d.tasks.length}`),
+      h("div", { class: "carousel" }, ...d.tasks.map((t) => h("button", { class: "tile", onclick: async () => render(await call("get_task_status", { taskId: t.taskId })) },
+        h("div", { style: "display:flex;align-items:center;gap:8px" }, h("div", { class: "ava", style: "width:28px;height:28px;font-size:12px" }, initials(t.person)), pill(t.status)),
+        h("div", { class: "t" }, t.title), h("div", { class: "s" }, [t.person, t.eta].filter(Boolean).join(" · "))))));
+  }
+
+  function teamCarousel(d) {
+    return h("div", {},
+      h("div", { class: "eyebrow" }, "Your team"),
+      h("div", { class: "carousel" }, ...d.contacts.map((c) => h("div", { class: `tile ${c.canCall === false ? "off" : ""}` },
+        h("div", { class: "ava" }, initials(c.name)), h("div", { class: "t" }, c.name), h("div", { class: "s" }, c.role), h("div", { class: "s", style: "margin-top:6px" }, c.canCall === false ? "Can't call (no consent or opted out)" : "✓ Agreed to calls")))));
+  }
+
+  function errandTiles(d) {
+    return h("div", {},
+      h("div", { class: "eyebrow" }, "Errands"),
+      h("div", { class: "carousel" }, ...d.errands.map((e) => h("button", { class: "tile", onclick: async () => { input = { request: e.name, place: e.place }; render(await call("run_errand", input)); } },
+        h("div", { style: "font-size:22px" }, /coffee|tea|chai/i.test(e.name) ? "☕" : /lunch|meal/i.test(e.name) ? "🍱" : /car|cab/i.test(e.name) ? "🚗" : "📋"),
+        h("div", { class: "t" }, e.name), h("div", { class: "s" }, `${e.person} · ${e.place}`)))));
+  }
+
+  app.ontoolinput = (p) => { input = p.arguments || {}; };
+  app.ontoolresult = (r) => render(r.structuredContent);
+  app.onhostcontextchanged = (ctx) => { if (ctx.theme) applyDocumentTheme(ctx.theme); };
+  app.connect().then(() => { const ctx = app.getHostContext && app.getHostContext(); if (ctx && ctx.theme) applyDocumentTheme(ctx.theme); });
+})();
+</script>
+</body>
+</html>

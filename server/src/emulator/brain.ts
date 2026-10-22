@@ -112,11 +112,21 @@ export interface ToolTrace {
   args: Record<string, unknown>;
   result: Record<string, unknown> | undefined;
   isError: boolean;
+  raw?: CallToolResult;
+}
+
+/** What the browser needs to render a tool's MCP Apps view. */
+export interface AppView {
+  resourceUri: string;
+  tool: string;
+  input: Record<string, unknown>;
+  result: CallToolResult;
 }
 
 export interface Turn {
   speech: string;
   card?: Record<string, unknown>;
+  ui?: AppView;
   tools: ToolTrace[];
   expectsReply: boolean;
 }
@@ -149,12 +159,14 @@ function alexaLikeFetch(onTraffic: (t: McpTraffic) => void, account?: AlexaAccou
         if (msg.method === "initialize") {
           msg.params.protocolVersion = "2025-03-26";
           msg.params.clientInfo = { name: "Alexa+ MCP Client (CallAssist local emulator)", version: "1.0.0" };
-          msg.params.capabilities = { roots: {} };
+          // roots, as Alexa+ sends; plus the MCP Apps UI extension this emulator can render.
+          msg.params.capabilities = { roots: {}, extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } } };
           body = JSON.stringify(msg);
         }
         onTraffic({ at: new Date().toISOString(), direction: "request", body: msg });
         if (account) {
-          const isTool = msg.method === "tools/call";
+          // Service token only for the handshake and listing; anything touching the user's data needs the linked user token.
+          const isTool = !["initialize", "notifications/initialized", "tools/list", "ping"].includes(msg.method);
           const token = isTool ? await account.userToken() : await account.serviceToken();
           if (token) headers.set("authorization", `Bearer ${token}`);
           else if (isTool) headers.delete("authorization");
@@ -203,6 +215,7 @@ export class AlexaBrain {
     await client.connect(transport);
     this.client = client;
     this.negotiatedVersion = (transport as unknown as { protocolVersion?: string }).protocolVersion;
+    await this.listTools().catch(() => {});
     await this.refresh();
   }
 
@@ -211,9 +224,30 @@ export class AlexaBrain {
     this.client = undefined;
   }
 
+  private uiByTool = new Map<string, string>();
+
   async listTools() {
     await this.connect();
-    return (await this.client!.listTools()).tools;
+    const tools = (await this.client!.listTools()).tools;
+    for (const t of tools) {
+      const meta = t._meta as { ui?: { resourceUri?: string } } | undefined;
+      if (meta?.ui?.resourceUri) this.uiByTool.set(t.name, meta.ui.resourceUri);
+    }
+    return tools;
+  }
+
+  /** MCP Apps: fetch a tool's ui:// view from the server. */
+  async readResource(uri: string): Promise<{ html: string; mimeType?: string }> {
+    await this.connect();
+    const r = await this.client!.readResource({ uri });
+    const c = r.contents[0] as { text?: string; mimeType?: string } | undefined;
+    return { html: c?.text ?? "", mimeType: c?.mimeType };
+  }
+
+  /** A tool call coming from an MCP Apps view (a button on the card). */
+  async callFromView(tool: string, args: Record<string, unknown>): Promise<CallToolResult> {
+    const t = await this.call(tool, args);
+    return t.raw ?? { content: [{ type: "text", text: String(t.result?.speech ?? "") }], structuredContent: t.result, isError: t.isError };
   }
 
   /** Reload the team and errand words used to understand requests. */
@@ -230,7 +264,7 @@ export class AlexaBrain {
     await this.connect();
     try {
       const res = (await this.client!.callTool({ name: tool, arguments: args })) as CallToolResult;
-      return { tool, args, result: res.structuredContent as Record<string, unknown> | undefined, isError: !!res.isError };
+      return { tool, args, result: res.structuredContent as Record<string, unknown> | undefined, isError: !!res.isError, raw: res };
     } catch (err) {
       if (/401|Unauthorized|linking/i.test(String(err))) {
         this.account?.unlink();
@@ -297,7 +331,9 @@ export class AlexaBrain {
       s.pending = { tool, args: { ...rest, confirmationToken: r.confirmationToken } };
     }
     if (tool === "list_team" || tool === "list_errands") void this.refresh().catch(() => {});
-    return { speech: String(r.speech ?? "Done."), card: { tool, ...r }, tools: [trace], expectsReply: needs || r.reason === "ambiguous" };
+    const uri = this.uiByTool.get(tool);
+    const ui = uri && trace.raw && !trace.isError ? { resourceUri: uri, tool, input: args, result: trace.raw } : undefined;
+    return { speech: String(r.speech ?? "Done."), card: { tool, ...r }, ui, tools: [trace], expectsReply: needs || r.reason === "ambiguous" };
   }
 
   // ------------------------------------------------------------------ rules

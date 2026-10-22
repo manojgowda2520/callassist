@@ -33,6 +33,24 @@ CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people 
 
 The Amazon Connect phone agent uses two more tools on a separate endpoint (`/agent/mcp`): `get_call_brief` and `report_outcome`.
 
+## MCP Apps: interactive cards in the conversation
+
+Every tool points to one MCP Apps view, `ui://callassist/card.html` (`text/html;profile=mcp-app`, built with `@modelcontextprotocol/ext-apps`). Hosts that support MCP Apps render it inline; hosts that don't (Alexa+ as documented today) get the same data as `structuredContent`.
+
+| The card shows | And you can |
+| --- | --- |
+| A read-back (who, what, when) | Tap **Confirm call**: the card calls the tool back with the one-time confirmation token |
+| A live task: Calling → On it → Done, the worker's words, a timeline | Watch it update by itself; tap **Follow up now** or **Cancel** |
+| A carousel of open tasks | Tap one for its live card |
+| A carousel of your team, with who agreed to calls | |
+| Errand tiles (coffee, tea, lunch, car) | Tap one to start the read-back |
+
+The view is self-contained (no external scripts), so it works under a strict host CSP. The local Alexa+ emulator is a full MCP Apps host (`AppBridge` + `PostMessageTransport`, sandboxed iframe).
+
+## Agent Skill
+
+[`skills/callassist/`](skills/callassist/SKILL.md) is an [Agent Skill](https://agentskills.io) in the open format: `SKILL.md` (when to use each tool, the read-back → yes → act rule, how to handle every outcome), a tool reference, and a script that checks a server is reachable. Any agent that supports Agent Skills can load it. The server also offers the same instructions over MCP as the `callassist` prompt.
+
 ## Safety, enforced by the server
 
 - **Your yes is checked, not assumed.** A read-back returns a one-time token bound to exactly what was read back. Without it, nobody is called. The same token stops a retry from calling twice.
@@ -71,7 +89,7 @@ cd server
 npm test
 ```
 
-107 tests run against a real server on a random port, with "worker bots" answering the local phones:
+113 tests run against a real server on a random port, with "worker bots" answering the local phones:
 
 | Suite | Covers |
 | --- | --- |
@@ -81,6 +99,7 @@ npm test
 | `flows` | Accept, decline, question then answer, problem then answer, automatic follow-up, no answer, rejected, hang-up, silence, unclear, cancel, inbound update, messages, parallel calls, Connect agent tools, email receipts, retention |
 | `emulator` | 25 natural phrasings to the right tool, full voice conversations, link-first behaviour, replies under 30 seconds with no screen references |
 | `unit` | Time parsing, what people say on the phone, wording helpers, persistence |
+| `apps` | Every tool links the MCP Apps view; the view is a self-contained `ui://` resource; the emulator host runs the card's tool calls; the Agent Skill follows the format and is served over MCP |
 | `more` | 50 phrasings across the main tools, 10 hostile callers, edge times, answers held until calling hours, follow-up limits, bursts past the call limit |
 
 ## Built with

@@ -292,6 +292,29 @@ export function createApp(opts: AppOptions) {
     b.account?.unlink();
     res.json({ linked: false });
   });
+  // MCP Apps host plumbing: the browser renders the view; the emulator's
+  // server-side MCP client (which holds the tokens) fetches it and runs its tool calls.
+  app.get("/api/alexa/resource", async (req, res) => {
+    const uri = String(req.query.uri ?? "");
+    if (!uri.startsWith("ui://")) return void res.status(400).json({ error: "ui:// resources only" });
+    try {
+      const b = await getBrain();
+      res.json(await b.readResource(uri));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  });
+  app.post("/api/alexa/tool", async (req, res) => {
+    const name = typeof req.body?.name === "string" ? req.body.name : "";
+    const args = req.body?.arguments && typeof req.body.arguments === "object" ? req.body.arguments : {};
+    if (!name) return void res.status(400).json({ error: "name required" });
+    try {
+      const b = await getBrain();
+      res.json(await b.callFromView(name, args));
+    } catch (err) {
+      res.status(502).json({ content: [{ type: "text", text: "Couldn't reach CallAssist." }], isError: true });
+    }
+  });
   app.get("/api/alexa/traffic", (req, res) => {
     const s = sse(res);
     const fn = (t: McpTraffic) => s.send("traffic", t);

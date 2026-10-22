@@ -67,6 +67,10 @@ Every tool:
 - Carries annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`). These are hints only; the server enforces the real rules.
 - Is logged as tool name, argument *shape* (no personal data), result and latency, plus CloudWatch EMF metrics.
 
+### MCP Apps and the Agent Skill
+
+Every tool sets `_meta.ui.resourceUri = "ui://callassist/card.html"`. The card renders read-backs (with a Confirm button that sends the confirmation token), live task status with Follow up and Cancel, and carousels for tasks, the team and errands. The same result is always available as `structuredContent` for data-only clients. The `skills/callassist` Agent Skill teaches any agent the workflow; the server also serves it as the `callassist` MCP prompt.
+
 ### Server-enforced confirmation (OWASP LLM06)
 
 A read-back returns a one-time `confirmationToken` bound to the exact tool, person and words. `confirmed=true` without that token, or with a token for anything else, calls nobody and returns a fresh read-back. The same token is the idempotency key: if Alexa+ retries a confirmed call, the first result comes back and nobody is called twice.

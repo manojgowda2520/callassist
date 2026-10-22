@@ -6,6 +6,7 @@ import { z } from "zod";
 import { CHILDREN, EMERGENCY, type Assistant } from "./assistant.js";
 import { CLOSED_TASK, OPEN_TASK, type Contact, type Errand, type Store, type Task } from "./store.js";
 import { parseTime } from "./time.js";
+import { CARD_URI, UI_MIME, cardHtml, skillText } from "./ui.js";
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
@@ -53,6 +54,7 @@ const TaskOut = z.looseObject({
 /** One output shape for every tool: what to say, plus data for cards. */
 export const OUTPUT = z.looseObject({
   speech: z.string().describe("What to say to the user. Same text as the content block; never contains IDs or codes."),
+  tool: z.string().optional().describe("Which tool produced this result (for MCP Apps views)"),
   reason: z.string().optional().describe("Why something couldn't be done, e.g. not_found, ambiguous, no_consent, opted_out, emergency, children, daily_cap, confirmation_missing"),
   needsConfirmation: z.boolean().optional().describe("True on a read-back: ask the user, then call again with confirmed=true and confirmationToken"),
   confirmationToken: z.string().optional().describe("One-time token for the read-back just given; send it back with confirmed=true"),
@@ -176,6 +178,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
             timer = setTimeout(() => resolve(say("That's taking longer than it should. Please ask me again in a moment.", { reason: "timeout" }, true)), limitMs);
           }),
         ]).finally(() => clearTimeout(timer));
+        if (result.structuredContent) (result.structuredContent as Record<string, unknown>).tool = name;
         log({ event: "tool", tool: name, args: redact(args), isError: !!result.isError, reason: (result.structuredContent as { reason?: string } | undefined)?.reason, ms: Date.now() - started });
         return result;
       } catch (err) {
@@ -231,6 +234,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: false, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("assign_task", ({ person, task, due, confirmed, confirmationToken }: { person: string; task: string; due?: string; confirmed?: boolean; confirmationToken?: string }) => {
       const p = onePerson(store, person);
@@ -279,6 +283,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: false, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("run_errand", ({ request, place, notes, confirmed, confirmationToken }: { request: string; place?: string; notes?: string; confirmed?: boolean; confirmationToken?: string }) => {
       if (EMERGENCY.test(`${request} ${notes ?? ""}`)) return say("I can't help with emergencies. For an emergency, call 911 right away.", { reason: "emergency" }, true);
@@ -331,6 +336,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: false, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("deliver_message", ({ person, message, question, confirmed, confirmationToken }: { person: string; message: string; question?: string; confirmed?: boolean; confirmationToken?: string }) => {
       const p = onePerson(store, person);
@@ -374,6 +380,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("get_task_status", async ({ taskId, person, waitSeconds }: { taskId?: string; person?: string; waitSeconds?: number }) => {
       const r = pickTask(store, taskId, person);
@@ -395,6 +402,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("list_tasks", ({ filter, person }: { filter?: "open" | "done" | "all"; person?: string }) => {
       let list = store.sortedTasks().filter((t) => t.title !== `${t.assigneeName} called`);
@@ -427,6 +435,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: false, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("follow_up", ({ taskId, person }: { taskId?: string; person?: string }) => {
       const r = pickTask(store, taskId, person, true);
@@ -451,6 +460,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: false, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("answer_question", ({ answer, taskId, person }: { answer: string; taskId?: string; person?: string }) => {
       let r = pickTask(store, taskId, person, true);
@@ -485,6 +495,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       },
       annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("cancel_task", ({ taskId, person, notifyPerson, confirmed, confirmationToken }: { taskId?: string; person?: string; notifyPerson?: boolean; confirmed?: boolean; confirmationToken?: string }) => {
       const r = pickTask(store, taskId, person, true);
@@ -517,6 +528,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       inputSchema: { name: z.string().min(1).max(60).optional().describe("Optional: one name, nickname or role to look up") },
       annotations: { readOnlyHint: true, openWorldHint: false },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("list_team", ({ name }: { name?: string }) => {
       const view = (cs: Contact[]) => cs.map((c) => ({ name: c.name, role: c.label, aliases: c.aliases, canCall: c.consent && !c.optedOut }));
@@ -543,6 +555,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
       inputSchema: { place: z.string().max(40).optional().describe("Optional place, such as office or home") },
       annotations: { readOnlyHint: true, openWorldHint: false },
       outputSchema: OUTPUT,
+      _meta: { ui: { resourceUri: CARD_URI } },
     },
     wrap("list_errands", ({ place }: { place?: string }) => {
       const list = store.errands.filter((e) => !place || norm(e.place) === norm(place));
@@ -551,6 +564,28 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
         errands: list.map((e) => ({ name: e.name, place: e.place, person: store.contact(e.contactId)?.name, triggers: e.triggers })),
       });
     }),
+  );
+
+  // ------------------------------------------------------------- MCP Apps
+  server.registerResource(
+    "callassist-card",
+    CARD_URI,
+    {
+      title: "CallAssist card",
+      description: "Interactive card for CallAssist results: read-backs with a Confirm button, live task status, task and team carousels.",
+      mimeType: UI_MIME,
+    },
+    async () => ({ contents: [{ uri: CARD_URI, mimeType: UI_MIME, text: cardHtml(), _meta: { ui: { prefersBorder: false } } }] }),
+  );
+
+  // ------------------------------------------------------------- Agent Skill
+  // The same instructions as skills/callassist/SKILL.md, offered over MCP so any
+  // connected agent can load them.
+  const skill = skillText();
+  server.registerPrompt(
+    "callassist",
+    { title: "CallAssist skill", description: skill.description },
+    () => ({ description: skill.description, messages: [{ role: "user", content: { type: "text", text: skill.body } }] }),
   );
 
   return server;

@@ -50,6 +50,7 @@
   .dark-badge.red { background: #d8433b33; color: #ffaaa4; }
   .dark-badge.gray { background: #ffffff1a; color: #c9d2de; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .appbadge { margin-top: 6px; font-size: 11px; color: #6f83a0; font-family: ui-monospace, Menlo, monospace; }
   .chips span { background: #ffffff14; border: 1px solid #ffffff1f; padding: 6px 12px; border-radius: 999px; font-size: 14px; }
 
   .lightbar { height: 10px; margin: 12px -18px 0; border-radius: 0 0 28px 28px; background: #0b0c0f; position: relative; overflow: hidden; }
@@ -176,6 +177,7 @@
 
 <script type="module">
 import { api, stream, AudioQueue, Ringtone, Listener, el, timeAgo, STATUS } from "/static/common.js";
+import { AppBridge, PostMessageTransport } from "/static/vendor/mcp-apps-host.js";
 
 const $ = (id) => document.getElementById(id);
 const sessionId = (() => { try { return sessionStorage.ca_sid ||= crypto.randomUUID(); } catch { return crypto.randomUUID(); } })();
@@ -232,7 +234,8 @@ async function say(text) {
     const err = turn.tools?.[0]?.isError;
     $("reply").textContent = turn.speech;
     $("reply").classList.toggle("error", !!err);
-    renderCard(turn.card);
+    if (turn.ui) renderApp(turn.ui).catch(() => renderCard(turn.card));
+    else renderCard(turn.card);
     voice.push(turn.speech, turn.audio);
   } catch (e) {
     $("reply").textContent = "Sorry, I couldn't reach CallAssist.";
@@ -254,9 +257,44 @@ function linkCard() {
     el("div", { class: "sub", style: "margin-top:6px" }, "Like enabling a skill in the Alexa app: you approve CallAssist once, and Alexa gets a token to act for you."),
     el("div", { class: "btns" }, el("button", { class: "yes", onclick: startLink }, "Link account")));
 }
+// ---- MCP Apps host: render the tool's ui:// view in a sandboxed iframe
+const viewCache = new Map();
+let bridge = null;
+let bridgeUri = null;
+async function renderApp(ui) {
+  const slot = $("card");
+  cardTask = null;
+  // Same view already on screen: hand it the new result instead of reloading it.
+  if (bridge && bridgeUri === ui.resourceUri && slot.querySelector("iframe")) {
+    await bridge.sendToolInput({ arguments: ui.input });
+    await bridge.sendToolResult(ui.result);
+    return;
+  }
+  if (bridge) { try { await bridge.teardownResource({}); } catch {} bridge = null; bridgeUri = null; }
+  let view = viewCache.get(ui.resourceUri);
+  if (!view) { view = await api(`/api/alexa/resource?uri=${encodeURIComponent(ui.resourceUri)}`); viewCache.set(ui.resourceUri, view); }
+  const frame = el("iframe", { sandbox: "allow-scripts", title: "CallAssist card", style: "width:100%;border:0;height:180px;background:transparent;display:block", allowtransparency: "true" });
+  slot.replaceChildren(frame, el("div", { class: "appbadge" }, "MCP App · ", ui.resourceUri));
+  const b = new AppBridge(null, { name: "Alexa+ emulator", version: "1.0.0" }, { serverTools: {}, logging: {} }, { hostContext: { theme: "dark", displayMode: "inline", platform: "web" } });
+  b.oncalltool = async (params) => {
+    const r = await api("/api/alexa/tool", { name: params.name, arguments: params.arguments ?? {} });
+    // Button presses speak; the card's own background status checks stay quiet (updates are announced separately).
+    const speech = params.name !== "get_task_status" ? r?.structuredContent?.speech : undefined;
+    if (speech) { $("reply").textContent = speech; voice.push(speech, "/tts?voice=alexa&text=" + encodeURIComponent(speech)); }
+    return r;
+  };
+  b.onsizechange = ({ height }) => { if (height) frame.style.height = `${Math.min(Math.ceil(height) + 4, 640)}px`; };
+  b.oninitialized = () => { b.sendToolInput({ arguments: ui.input }); b.sendToolResult(ui.result); };
+  frame.srcdoc = view.html;
+  await b.connect(new PostMessageTransport(frame.contentWindow, frame.contentWindow));
+  bridge = b;
+  bridgeUri = ui.resourceUri;
+}
+
 let cardTask = null;
 function renderCard(c) {
   const slot = $("card");
+  if (bridge) { bridge.teardownResource({}).catch(() => {}); bridge = null; bridgeUri = null; }
   slot.innerHTML = "";
   cardTask = null;
   if (!c) return;
