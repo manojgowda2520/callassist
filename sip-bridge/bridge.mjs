@@ -11,7 +11,7 @@
 // Needs Node 22+, or Node 20.10+ started with --experimental-websocket (built-in WebSocket and fetch). Config: environment variables,
 // see bridge.env.example.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const cfg = {
@@ -53,6 +53,8 @@ if (typeof WebSocket === "undefined") {
 const log = (event, extra = {}) => console.log(JSON.stringify({ at: new Date().toISOString(), event, ...extra }));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 mkdirSync(cfg.sounds, { recursive: true });
+// Spoken lines are cached per run only: a voice change on the server must never mix voices in one call.
+for (const f of readdirSync(cfg.sounds)) if (/^[0-9a-f]{20}\.wav$/.test(f)) unlinkSync(join(cfg.sounds, f));
 
 // ---------------------------------------------------------------- CallAssist API (OAuth client_credentials)
 let token = null;
