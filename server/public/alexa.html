@@ -135,7 +135,7 @@
         <div class="stage">
           <div>
             <div class="said" id="said"></div>
-            <div class="reply" id="reply">Hi Manoj. What can I take care of?</div>
+            <div class="reply" id="reply">Hi Madhu. What can I take care of?</div>
             <div class="hint" id="hint">Try “Alexa, get me a coffee” or “Ask Raju to set up the meeting room by 3”.</div>
           </div>
           <div class="cardslot" id="card"></div>
@@ -222,7 +222,7 @@ $("mic").onclick = () => {
 document.addEventListener("keydown", (e) => { if (e.code === "Space" && document.activeElement !== $("input") && !e.repeat) { e.preventDefault(); $("mic").click(); } });
 
 $("form").onsubmit = (e) => { e.preventDefault(); const t = $("input").value.trim(); if (t) { micMode = false; say(t); $("input").value = ""; } };
-$("wakeBtn").onclick = () => { tones.unlock(); $("wake").remove(); voice.push("Hi Manoj. What can I take care of?", "/tts?voice=alexa&text=" + encodeURIComponent("Hi Manoj. What can I take care of?")); };
+$("wakeBtn").onclick = () => { tones.unlock(); $("wake").remove(); voice.push("Hi Madhu. What can I take care of?", "/tts?voice=alexa&text=" + encodeURIComponent("Hi Madhu. What can I take care of?")); };
 
 // The /try page drives this emulator from its guided steps.
 window.say = (text) => say(text);

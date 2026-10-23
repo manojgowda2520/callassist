@@ -67,8 +67,8 @@ test("readWorker: what people say on the phone", () => {
 
 test("emulator language helpers", () => {
   assert.equal(normalize("Alexa, get me a coffee!"), "get me a coffee");
-  assert.equal(toThirdPerson("bring my charger to me", "Manoj"), "bring Manoj's charger to Manoj");
-  assert.equal(toRecipient("I'll pick her up at 5", "Manoj"), "Manoj will pick you up at 5.");
+  assert.equal(toThirdPerson("bring my charger to me", "Madhu"), "bring Madhu's charger to Madhu");
+  assert.equal(toRecipient("I'll pick her up at 5", "Madhu"), "Madhu will pick you up at 5.");
   assert.equal(toQuestion("if she needs anything from the store"), "Do you need anything from the store?");
   assert.equal(toQuestion("whether the car is free"), "Is the car free?");
   assert.equal(toQuestion("if he can come at 4"), "Can you come at 4?");

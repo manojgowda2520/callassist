@@ -33,7 +33,7 @@ let bridgeLog = "";
 before(async () => {
   // ---- CallAssist with OAuth and the SIP line
   const seed = structuredClone(SEED);
-  seed.contacts.push({ id: "c_test", name: "Manoj Mobile", label: "test phone", aliases: [], phone: "+919800000000", consent: true, optedOut: false, line: "sip", consentRecord: { at: "2026-10-22T00:00:00Z", method: "written", wording: "AI-voice calls ok" } });
+  seed.contacts.push({ id: "c_test", name: "Madhu Mobile", label: "test phone", aliases: [], phone: "+919800000000", consent: true, optedOut: false, line: "sip", consentRecord: { at: "2026-10-22T00:00:00Z", method: "written", wording: "AI-voice calls ok" } });
   store = new Store(seed);
   const local = new LocalPhoneNetwork();
   sip = new SipTelephony(new SipBroker());
@@ -47,7 +47,7 @@ before(async () => {
   ca.listen(0, "127.0.0.1");
   await once(ca, "listening");
   const base = `http://127.0.0.1:${(ca.address() as AddressInfo).port}`;
-  const auth = new AuthServer({ issuer: base, resource: `${base}/mcp`, agentResource: `${base}/agent/mcp`, secret: "s", userId: "u", userName: "Manoj", clients: [{ clientId: "sip-bridge", clientSecret: "bridge-secret", name: "bridge", redirectUris: [], serviceScopes: ["agent:calls"] }] });
+  const auth = new AuthServer({ issuer: base, resource: `${base}/mcp`, agentResource: `${base}/agent/mcp`, secret: "s", userId: "u", userName: "Madhu", clients: [{ clientId: "sip-bridge", clientSecret: "bridge-secret", name: "bridge", redirectUris: [], serviceScopes: ["agent:calls"] }] });
   ca.on("request", createApp({ assistant, phone: local, sip, phoneSpeech: speech, auth, publicDir: join(here, "../public"), rateLimits: { mcp: 0, token: 0, alexa: 0 } }));
   assistant.start();
 

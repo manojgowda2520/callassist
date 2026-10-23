@@ -38,7 +38,7 @@ before(async () => {
     agentResource: `${base}/agent/mcp`,
     secret: "test-secret",
     userId: "user-manoj",
-    userName: "Manoj",
+    userName: "Madhu",
     tokenTtlSec: 3600,
     clients: [
       { clientId: ALEXA.id, clientSecret: ALEXA.secret, name: "Alexa", redirectUris: [`${base}/alexa/callback`], serviceScopes: ["mcp:service"] },
@@ -249,7 +249,7 @@ test("two accounts never see each other's tasks", async () => {
   const mine = await call("user-manoj", "list_tasks", { filter: "all" });
   assert.ok(mine.body.result.structuredContent.total >= 1);
   const theirs = await call("user-priya", "list_tasks", { filter: "all" });
-  assert.equal(theirs.body.result.structuredContent.total ?? 0, 0, "Priya sees none of Manoj's tasks");
+  assert.equal(theirs.body.result.structuredContent.total ?? 0, 0, "Priya sees none of Madhu's tasks");
   const peek = await call("user-priya", "get_task_status", { taskId });
   assert.equal(peek.body.result.isError, true, "even with the exact taskId");
   const cancel = await call("user-priya", "cancel_task", { taskId, confirmed: true, confirmationToken: rb.body.result.structuredContent.confirmationToken });

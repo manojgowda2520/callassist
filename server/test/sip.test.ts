@@ -25,7 +25,7 @@ afterEach(async () => {
 
 async function start(withBridge = true) {
   const seed = structuredClone(SEED);
-  seed.contacts.push({ id: "c_test", name: "Manoj Mobile", label: "test phone", aliases: [], phone: "+919800000000", consent: true, optedOut: false, line: "sip", timezone: "Asia/Kolkata", consentRecord: { at: "2026-10-22T00:00:00Z", method: "written", wording: "AI-voice calls ok" } });
+  seed.contacts.push({ id: "c_test", name: "Madhu Mobile", label: "test phone", aliases: [], phone: "+919800000000", consent: true, optedOut: false, line: "sip", timezone: "Asia/Kolkata", consentRecord: { at: "2026-10-22T00:00:00Z", method: "written", wording: "AI-voice calls ok" } });
   const store = new Store(seed);
   const local = new LocalPhoneNetwork();
   const broker = new SipBroker();
@@ -72,7 +72,7 @@ test("a full call over SIP turns, same engine as every other line", async () => 
   const t = r.task();
   const callId = t.callIds[0];
   const hello = await r.turn(callId, "answered");
-  assert.match(hello.say, /Manoj's AI assistant/);
+  assert.match(hello.say, /Madhu's AI assistant/);
   await r.turn(callId, "heard", "okay");
   const bye = await r.turn(callId, "heard", "in ten minutes");
   assert.equal(bye.end, true);
@@ -133,7 +133,7 @@ test("sounds like a person: first name, plain ask, no callback number on the SIP
   const t = r.task();
   const callId = t.callIds[0];
   const hello = await r.turn(callId, "answered");
-  assert.match(hello.say, /^Hi Manoj! /, "greets by first name, not 'Manoj Mobile'");
+  assert.match(hello.say, /^Hi Madhu! /, "greets by first name, not 'Madhu Mobile'");
   assert.match(hello.say, /wondering if you could bring the visitor badges/);
   await r.turn(callId, "heard", "okay");
   const bye = await r.turn(callId, "heard", "in ten minutes");

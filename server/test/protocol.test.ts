@@ -129,7 +129,7 @@ test("health endpoint and state API", async () => {
   const h = await (await fetch(`${env.url}/healthz`)).json();
   assert.equal(h.ok, true);
   const s = await (await fetch(`${env.url}/api/state`)).json();
-  assert.equal(s.user.name, "Manoj");
+  assert.equal(s.user.name, "Madhu");
   assert.ok(s.contacts.length >= 5);
 });
 

@@ -21,7 +21,7 @@ test("errand: coffee → Raju says yes in 10 minutes → user is told", async ()
   const t = await until(() => task(go.data.taskId).status === "accepted" && task(go.data.taskId), 3000, "accepted");
   assert.equal(t.eta, "in 10 minutes");
   assert.equal(bot.calls.length, 1);
-  assert.match(bot.heard.get(bot.calls[0])!.join(" "), /Manoj's AI assistant/, "AI disclosure first");
+  assert.match(bot.heard.get(bot.calls[0])!.join(" "), /Madhu's AI assistant/, "AI disclosure first");
   assert.ok(notes().some((n) => /Raju is on it.*10 minutes/.test(n)));
   const status = await env.tool("get_task_status", { taskId: t.id });
   assert.match(status.text, /Raju is on it/);
@@ -139,9 +139,9 @@ test("unclear twice → retried later", async () => {
 
 test("message to Grandma brings back her reply", async () => {
   workerBot(env, "c_grandma", ["Yes, milk and bread please"]);
-  const read = await env.tool("deliver_message", { person: "granny", message: "Manoj will pick you up at 5.", question: "Do you need anything from the store?" });
+  const read = await env.tool("deliver_message", { person: "granny", message: "Madhu will pick you up at 5.", question: "Do you need anything from the store?" });
   assert.equal(read.data.needsConfirmation, true);
-  const r = await env.tool("deliver_message", { person: "granny", message: "Manoj will pick you up at 5.", question: "Do you need anything from the store?", confirmed: true });
+  const r = await env.tool("deliver_message", { person: "granny", message: "Madhu will pick you up at 5.", question: "Do you need anything from the store?", confirmed: true });
   const t = await until(() => task(r.data.taskId).status === "done" && task(r.data.taskId));
   assert.equal(t.reply, "Yes, milk and bread please");
   const s = await env.tool("get_task_status", { person: "Grandma" });
@@ -230,7 +230,7 @@ test("phone-agent tools (Amazon Connect path) record outcomes", async () => {
   await until(() => env.store.calls.get(t.callIds[0])?.status === "in_progress");
   const agent = await connectClient(`${env.url}/agent/mcp`);
   const brief: any = await agent.callTool({ name: "get_call_brief", arguments: { callId: t.callIds[0] } });
-  assert.match(brief.structuredContent.disclosure, /AI assistant calling for Manoj/);
+  assert.match(brief.structuredContent.disclosure, /AI assistant calling for Madhu/);
   assert.equal(brief.structuredContent.task.details, "print the agenda");
   await agent.callTool({ name: "report_outcome", arguments: { callId: t.callIds[0], outcome: "accept", text: "Sure", eta: "in 10 minutes" } });
   assert.equal(task(t.id).status, "accepted");

@@ -54,7 +54,7 @@
       <div class="calls scroll" id="calls" style="max-height:60vh"></div>
     </div>
     <div class="card">
-      <h2>Updates to Manoj <small>Alexa notifications</small></h2>
+      <h2>Updates to Madhu <small>Alexa notifications</small></h2>
       <div class="feed scroll" id="feed" style="max-height:30vh"></div>
     </div>
     <div class="card">
@@ -67,7 +67,7 @@
 import { api, stream, el, timeAgo, STATUS } from "/static/common.js";
 const $ = (id) => document.getElementById(id);
 const tasks = new Map(), calls = new Map();
-const COLS = [["Calling", ["calling"]], ["On it", ["accepted"]], ["Needs Manoj", ["blocked"]], ["Closed", ["done", "declined", "unreachable", "cancelled"]]];
+const COLS = [["Calling", ["calling"]], ["On it", ["accepted"]], ["Needs Madhu", ["blocked"]], ["Closed", ["done", "declined", "unreachable", "cancelled"]]];
 
 function renderBoard() {
   const list = [...tasks.values()].filter((t) => !/ called$/.test(t.title)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
