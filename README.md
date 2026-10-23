@@ -2,7 +2,7 @@
 
 CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people for you. Tell Alexa what needs doing. CallAssist calls the right person on your team, explains the job, gets a yes and a time, follows up after the deadline, and tells you when it's done.
 
-> Status: built for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges). Runs fully on your computer today; the AWS deployment (Amazon Connect + Nova Sonic) uses the same code paths.
+> Status: built for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges). Live on AWS: **try it at https://d33lj83jn4hb7a.cloudfront.net/try** (Alexa+ emulator and demo phones side by side, no setup). It also runs fully on your computer.
 
 ```
  A  You          "Alexa, ask Raju to set up the meeting room by 3."
@@ -105,7 +105,11 @@ npm test
 ## Built with
 
 - MCP TypeScript SDK, Streamable HTTP (stateless), spec 2025-11-25 with negotiation down to 2025-03-26
-- Planned on AWS (us-east-1): Amazon Connect + Nova Sonic speech-to-speech for calls; Amazon Bedrock AgentCore Gateway for the phone-agent tools; Amazon Cognito; Amazon DynamoDB (per-user keys, TTL); Amazon SES; CloudWatch (EMF metrics); CloudFormation deployed by GitHub Actions with OIDC
+- Alexa+ emulator brain: Amazon Nova Pro on Amazon Bedrock (Converse API with the MCP tools), with instant rules for common phrases and as a fallback
+- Voices: Amazon Polly generative (Danielle for Alexa), Polly Kajal (Indian English) on the SIP line; speech to text: Amazon Transcribe streaming
+- Phone lines: Amazon Connect (outbound voice and WebRTC browser calling) for US numbers; a SIP bridge (`sip-bridge/`, Asterisk ARI) for India, with talk detection
+- AWS (us-east-1): EC2 Graviton + Docker behind CloudFront, ECR (scan on push), Secrets Manager, SSM, CloudWatch EMF metrics, all in CloudFormation (`infra/`)
+- CI/CD: GitHub Actions with OIDC: tests, cfn-lint, cfn-guard, gitleaks, npm audit, Trivy, then ECR and an SSM deploy with automatic rollback
 
 ## Docs
 
