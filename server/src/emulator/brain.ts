@@ -160,7 +160,7 @@ const QUICK_TOOLS = new Set(["list_tasks", "get_task_status", "list_team", "list
 const SUGGESTED = new Set(
   [
     "Get me a coffee",
-    "Ask Raju to set up the meeting room by 3 pm",
+    "Ask Raju to bring tea and snacks to the meeting room by 3 pm",
     "Tell Grandma I'll pick her up at 5 and ask if she needs anything from the store",
     "Have Lakshmi make dinner for 4 people tonight",
   ].map((p) => normalize(p)),
