@@ -23,8 +23,18 @@ Parameters:
     Type: String
     Description: Where alarms are emailed.
 
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain for CallAssist (e.g. callassist.mobil80.com). Empty keeps the CloudFront address.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route 53 hosted zone for DomainName (certificate validation and the alias records)
+
 Conditions:
   HasConnect: !Not [!Equals [!Ref ConnectInstanceArn, ""]]
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   # ------------------------------------------------------------------ network
@@ -102,8 +112,8 @@ Resources:
     Properties:
       Name: /callassist/public-url
       Type: String
-      Value: !Sub https://${Cdn.DomainName}
-      Description: Public HTTPS URL of CallAssist (CloudFront)
+      Value: !If [HasDomain, !Sub "https://${DomainName}", !Sub "https://${Cdn.DomainName}"]
+      Description: Public HTTPS URL of CallAssist
 
   ImageTagParam:
     Type: AWS::SSM::Parameter
@@ -247,12 +257,30 @@ Resources:
       Tags: [{ Key: project, Value: callassist }]
 
   # ------------------------------------------------------------------ HTTPS in front
+  # Certificate for the custom domain, validated through its Route 53 zone (CloudFront needs it in us-east-1).
+  Cert:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasDomain
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames: [!Sub "www.${DomainName}"]
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - { DomainName: !Ref DomainName, HostedZoneId: !Ref HostedZoneId }
+        - { DomainName: !Sub "www.${DomainName}", HostedZoneId: !Ref HostedZoneId }
+      Tags: [{ Key: project, Value: callassist }]
+
   Cdn:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Enabled: true
         Comment: CallAssist
+        Aliases: !If [HasDomain, [!Ref DomainName, !Sub "www.${DomainName}"], !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomain
+          - { AcmCertificateArn: !Ref Cert, SslSupportMethod: sni-only, MinimumProtocolVersion: TLSv1.2_2021 }
+          - !Ref AWS::NoValue
         HttpVersion: http2and3
         PriceClass: PriceClass_100
         Origins:
@@ -273,7 +301,56 @@ Resources:
           Compress: true
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # AllViewerExceptHostHeader
+          FunctionAssociations: !If
+            - HasDomain
+            - [{ EventType: viewer-request, FunctionARN: !GetAtt WwwRedirect.FunctionMetadata.FunctionARN }]
+            - !Ref AWS::NoValue
       Tags: [{ Key: project, Value: callassist }]
+
+  # www.<domain> → <domain>, so account linking and the Try it page always run on one origin.
+  WwwRedirect:
+    Type: AWS::CloudFront::Function
+    Condition: HasDomain
+    Properties:
+      Name: callassist-www-redirect
+      AutoPublish: true
+      FunctionConfig: { Comment: Redirect www to the main domain, Runtime: cloudfront-js-2.0 }
+      FunctionCode: !Sub |
+        function handler(event) {
+          var r = event.request;
+          if (r.headers.host && r.headers.host.value.indexOf("www.") === 0) {
+            var qs = Object.keys(r.querystring).map(function (k) { return k + "=" + r.querystring[k].value; }).join("&");
+            return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: "https://${DomainName}" + r.uri + (qs ? "?" + qs : "") } } };
+          }
+          return r;
+        }
+
+  DnsWww:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "www.${DomainName}"
+      Type: A
+      AliasTarget: { DNSName: !GetAtt Cdn.DomainName, HostedZoneId: Z2FDTNDATAQYW2 }
+
+  DnsIpv4:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget: { DNSName: !GetAtt Cdn.DomainName, HostedZoneId: Z2FDTNDATAQYW2 } # CloudFront's fixed zone
+
+  DnsIpv6:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget: { DNSName: !GetAtt Cdn.DomainName, HostedZoneId: Z2FDTNDATAQYW2 }
 
   # ------------------------------------------------------------------ alerts
   Alerts:
