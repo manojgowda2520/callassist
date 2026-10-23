@@ -221,7 +221,7 @@ test("every call names the business, offers stop, and gives a callback number", 
   await until(() => env.store.tasks.get(r.data.taskId)!.status === "accepted");
   await until(() => env.store.activeCalls().length === 0);
   const said = env.store.calls.get(bot.calls[0])!.transcript.filter((l) => l.who === "assistant").map((l) => l.text);
-  assert.match(said[0], /AI assistant calling for Manoj, on behalf of Mobil80\. You can say stop at any time\./);
+  assert.match(said[0], /Manoj's AI assistant at Mobil80\. Just a quick one, and you can say stop anytime\./);
   assert.match(said.at(-1)!, /To reach CallAssist, call \+1 555 010 0000/);
 });
 

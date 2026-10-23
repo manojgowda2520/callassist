@@ -84,6 +84,7 @@ export class Assistant {
       answered: (id) => this.onAnswered(id),
       heard: (id, text) => this.onHeard(id, text),
       hungUp: (id) => this.onContactHungUp(id),
+      silent: (id) => this.noReply(id),
     });
   }
 
@@ -257,10 +258,10 @@ export class Assistant {
     let task = open[0];
     let opening: string[];
     if (task) {
-      opening = [`Hi ${contact.name}, this is CallAssist, ${this.user}'s assistant.`, `Is this about: ${task.title}? What's the update?`];
+      opening = [`Hi ${firstName(contact.name)}, this is ${this.user}'s AI assistant.`, `Is this about ${task.title}? How's it going?`];
     } else {
       task = this.store.createTask({ kind: "message", title: `${contact.name} called`, details: `${contact.name} called CallAssist`, assigneeId: contact.id, assigneeName: contact.name });
-      opening = [`Hi ${contact.name}, this is CallAssist, ${this.user}'s assistant.`, `What would you like me to tell ${this.user}?`];
+      opening = [`Hi ${firstName(contact.name)}, this is ${this.user}'s AI assistant.`, `What would you like me to pass on to ${this.user}?`];
     }
     const call = this.store.createCall({ taskId: task.id, purpose: "follow_up", contactId: contact.id, contactName: contact.name, phone: contact.phone, script: opening, provider: this.phone.name });
     this.convs.set(call.id, { purpose: "inbound", unclear: 0, askedEta: false, resolved: false, timers: [] });
@@ -281,10 +282,13 @@ export class Assistant {
     if (!task) return undefined;
     const conv = this.convs.get(callId);
     const name = task.assigneeName;
+    const first = firstName(name);
+    // The SIP test number takes no incoming calls, so there is no number to read out there.
+    const callbackOk = this.store.contact(task.assigneeId)?.line !== "sip";
     const finish = (line: string) => {
       if (conv) conv.resolved = true;
       this.speak(callId, line);
-      if (this.store.business?.callback && reading.intent !== "optout") this.speak(callId, `To reach CallAssist, call ${this.store.business.callback}.`);
+      if (this.store.business?.callback && callbackOk && reading.intent !== "optout") this.speak(callId, `To reach CallAssist, call ${this.store.business.callback}.`);
       if (opts.closeCall !== false) this.endCall(callId, "Call finished.");
     };
 
@@ -298,13 +302,13 @@ export class Assistant {
       if (!CLOSED_TASK.includes(task.status)) this.store.updateTask(task.id, { status: "declined", reply: reading.text, nextActionAt: undefined });
       this.store.addUpdate(task.id, "worker", reading.text);
       this.tell(task, `${name} asked not to get calls from CallAssist. I won't call them again.`);
-      finish(`Understood. CallAssist won't call you again. Goodbye.`);
+      finish(`Understood. I won't call you again. Sorry to bother you, take care.`);
       return task;
     }
 
     if (call.purpose === "cancel_notice" || task.status === "cancelled") {
       this.store.addUpdate(task.id, "worker", reading.text);
-      finish("Thanks. Goodbye.");
+      finish(`Thanks, ${first}. Bye for now!`);
       return task;
     }
 
@@ -312,7 +316,7 @@ export class Assistant {
       this.store.updateTask(task.id, { status: "done", reply: reading.text, nextActionAt: undefined });
       this.store.addUpdate(task.id, "worker", reading.text);
       this.tell(task, `${name} says: "${reading.text}"`);
-      finish(`Thank you, I'll pass that on to ${this.user}. Goodbye.`);
+      finish(`Got it, I'll pass that on to ${this.user}. Thanks, ${first}!`);
       return task;
     }
 
@@ -320,7 +324,7 @@ export class Assistant {
       this.store.updateTask(task.id, { status: "done", reply: reading.text });
       this.store.addUpdate(task.id, "worker", reading.text);
       this.tell(task, `${name} called and said: "${reading.text}"`);
-      finish(`Got it. I'll tell ${this.user}. Goodbye.`);
+      finish(`Okay, I'll let ${this.user} know. Thanks, ${first}!`);
       return task;
     }
 
@@ -329,7 +333,7 @@ export class Assistant {
         this.store.updateTask(task.id, { status: "done", reply: reading.text, nextActionAt: undefined });
         this.store.addUpdate(task.id, "worker", reading.text);
         this.tell(task, `${name} says it's done: ${task.title}.`);
-        finish(`Great, thank you! I'll let ${this.user} know. Bye.`);
+        finish(`Oh great, thank you! I'll let ${this.user} know it's done.`);
         return task;
       }
       case "accept":
@@ -339,7 +343,7 @@ export class Assistant {
           conv.askedEta = true;
           this.store.updateTask(task.id, { status: "accepted", reply: reading.text });
           this.store.addUpdate(task.id, "worker", reading.text);
-          this.speak(callId, "Great. Roughly when will it be done?");
+          this.speak(callId, "Great, thanks! Roughly when do you think it'll be done?");
           return task;
         }
         const etaAt = eta?.at?.toISOString();
@@ -347,44 +351,44 @@ export class Assistant {
         this.store.updateTask(task.id, { status: "accepted", eta: eta?.text, etaAt, reply: reading.text, nextActionAt: followAt });
         this.store.addUpdate(task.id, "worker", reading.text);
         this.tell(task, eta ? `${name} is on it: ${task.title}, ${eta.text}.` : `${name} is on it: ${task.title}.`);
-        finish(eta ? `Perfect, ${eta.text}. Thank you!` : "Perfect, thank you!");
+        finish(eta ? `Perfect, ${eta.text} then. Thanks so much, ${first}!` : `Perfect. Thanks so much, ${first}!`);
         return task;
       }
       case "decline": {
         this.store.updateTask(task.id, { status: "declined", reply: reading.text, nextActionAt: undefined });
         this.store.addUpdate(task.id, "worker", reading.text);
         this.tell(task, `${name} can't do it: "${reading.text}". Want me to ask someone else?`);
-        finish(`No problem. I'll let ${this.user} know. Thank you.`);
+        finish(`No problem at all. I'll let ${this.user} know. Thanks, ${first}!`);
         return task;
       }
       case "blocked": {
         this.store.updateTask(task.id, { status: "blocked", reply: reading.text, nextActionAt: undefined });
         this.store.addUpdate(task.id, "worker", reading.text);
         this.tell(task, `${name} has a problem with ${task.title}: "${reading.text}". What should I tell them?`);
-        finish(`Okay. I'll tell ${this.user} and get back to you.`);
+        finish(`Okay, I'll check with ${this.user} and get back to you.`);
         return task;
       }
       case "question": {
         this.store.updateTask(task.id, { status: "blocked", reply: reading.text, nextActionAt: undefined });
         this.store.addUpdate(task.id, "worker", reading.text);
         this.tell(task, `${name} asks about ${task.title}: "${reading.text}". What should I tell them?`);
-        finish(`Good question. I'll check with ${this.user} and call you back.`);
+        finish(`Good question. Let me check with ${this.user}, and I'll call you right back.`);
         return task;
       }
       default: {
         if (conv?.askedEta && task.status === "accepted") {
           this.store.addUpdate(task.id, "worker", reading.text);
           this.tell(task, `${name} is on it: ${task.title}.`);
-          finish("No problem. Thank you!");
+          finish(`No problem. Thanks, ${first}!`);
           return task;
         }
         if (conv && conv.unclear < 1) {
           conv.unclear++;
-          this.speak(callId, call.purpose === "follow_up" ? "Sorry, I didn't catch that. Is it done yet?" : "Sorry, I didn't catch that. Can you do it?");
+          this.speak(callId, call.purpose === "follow_up" ? "Sorry, I didn't catch that. Is it done yet?" : "Sorry, I didn't catch that. Would you be able to do it?");
           return task;
         }
         this.store.addUpdate(task.id, "worker", reading.text);
-        this.speak(callId, "Sorry, the line isn't clear. I'll try you again later. Bye.");
+        this.speak(callId, "Sorry, the line's not very clear. I'll try you again later. Bye for now!");
         if (conv) conv.resolved = true;
         this.endCall(callId, "Couldn't understand the answer.");
         this.afterFailedCall(task, call, "I couldn't understand the answer");
@@ -420,18 +424,19 @@ export class Assistant {
   }
 
   private script(task: Task, purpose: CallPurpose, answer?: string): string[] {
-    const biz = this.store.business ? `, on behalf of ${this.store.business.name}` : "";
-    const hi = `Hi ${task.assigneeName}, this is CallAssist, an AI assistant calling for ${this.user}${biz}. You can say stop at any time.`;
-    if (purpose === "cancel_notice") return [hi, `${this.user} has cancelled: ${task.title}. No need to do it anymore. Sorry for the trouble.`];
-    if (purpose === "follow_up") return [`Hi ${task.assigneeName}, it's CallAssist, the AI assistant, again for ${this.user}.`, `Just checking on: ${task.title}. Is it done?`];
+    const biz = this.store.business ? ` at ${this.store.business.name}` : "";
+    const first = firstName(task.assigneeName);
+    const hi = `Hi ${first}! This is ${this.user}'s AI assistant${biz}. Just a quick one, and you can say stop anytime.`;
+    if (purpose === "cancel_notice") return [hi, `${this.user} has cancelled ${task.title}, so there's no need to do it anymore. Sorry for the trouble!`];
+    if (purpose === "follow_up") return [`Hi ${first}, it's ${this.user}'s AI assistant again.`, `Just checking in on ${task.title}. Is it done yet?`];
     if (answer) {
-      const q = task.reply ? `You asked: "${task.reply}". ` : "";
-      return [hi, `About ${task.title}. ${q}${this.user} says: ${answer}`, "Can you go ahead?"];
+      const q = task.reply ? `You'd asked: "${task.reply}". ` : "";
+      return [hi, `About ${task.title}. ${q}${this.user} says: ${answer}.`, "Can you go ahead?"];
     }
-    if (task.kind === "message") return [hi, `${this.user} asked me to tell you: ${task.details}`, task.question ?? "Is there anything you'd like me to tell them back?"];
-    if (task.kind === "errand") return [hi, task.details, task.question ?? "Can you do that?"];
-    const due = task.dueText ? ` It's needed ${task.dueText}.` : "";
-    return [hi, `${this.user} needs this done: ${task.details}.${due}`, "Can you take care of it?"];
+    if (task.kind === "message") return [hi, `${this.user} asked me to tell you: ${task.details}.`, task.question ?? `Anything you'd like me to tell ${this.user}?`];
+    if (task.kind === "errand") return [hi, task.details, task.question ?? "Would you be able to do that?"];
+    const due = task.dueText ? ` ${this.user} needs it ${task.dueText}.` : "";
+    return [hi, `${this.user} was wondering if you could ${asAsk(task.details)}.${due}`, "Would you be able to do that?"];
   }
 
   private onAnswered(callId: string): void {
@@ -442,7 +447,7 @@ export class Assistant {
     for (const line of call.script) this.speak(callId, line);
     if (call.purpose === "cancel_notice") {
       // Nothing to ask: say it and hang up.
-      this.speak(callId, "Thank you. Goodbye.");
+      this.speak(callId, "Thank you. Bye for now!");
       this.endCall(callId, "Told them it's cancelled.");
       return;
     }
@@ -538,19 +543,22 @@ export class Assistant {
 
   private armSilence(callId: string): void {
     this.clearTimers(callId);
-    this.timer(callId, this.config.silenceTimeoutMs, () => {
-      const call = this.store.calls.get(callId);
-      if (call?.status !== "in_progress") return;
-      this.speak(callId, "I'll try you again later. Bye.");
-      const conv = this.convs.get(callId);
-      const resolved = conv?.resolved;
-      this.endCall(callId, "No reply on the line.");
-      const task = this.store.tasks.get(call.taskId);
-      if (task && !resolved && call.purpose !== "cancel_notice" && !CLOSED_TASK.includes(task.status)) {
-        if (task.status === "accepted" && call.purpose === "assign") return; // they already said yes
-        this.afterFailedCall(task, call, "no reply on the line");
-      }
-    });
+    this.timer(callId, this.config.silenceTimeoutMs, () => this.noReply(callId));
+  }
+
+  /** Nobody is answering on an open line: end politely, keep any yes already given, retry otherwise. */
+  private noReply(callId: string): void {
+    const call = this.store.calls.get(callId);
+    if (call?.status !== "in_progress") return;
+    this.speak(callId, "Sorry, I can't hear you very well. I'll try you again later. Bye for now!");
+    const conv = this.convs.get(callId);
+    const resolved = conv?.resolved;
+    this.endCall(callId, "No reply on the line.");
+    const task = this.store.tasks.get(call.taskId);
+    if (task && !resolved && call.purpose !== "cancel_notice" && !CLOSED_TASK.includes(task.status)) {
+      if (task.status === "accepted" && call.purpose === "assign") return; // they already said yes
+      this.afterFailedCall(task, call, "no reply on the line");
+    }
   }
 
   activeCallFor(task: Task): CallRecord | undefined {
@@ -677,4 +685,17 @@ export class Assistant {
     conv.timers.forEach(clearTimeout);
     conv.timers = [];
   }
+}
+
+/** "Ravi Kumar" → "Ravi": people are greeted by first name. */
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+/** "Set up the room." → "set up the room", ready for "could you …". A noun phrase gets "help with". */
+function asAsk(details: string): string {
+  const d = details.trim().replace(/[.!]+$/, "");
+  const firstWord = d.split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (/^(the|a|an|my|our|your|his|her|their|this|that|some)$/.test(firstWord)) return `help with ${d.charAt(0).toLowerCase()}${d.slice(1)}`;
+  return d.charAt(0).toLowerCase() + d.slice(1);
 }

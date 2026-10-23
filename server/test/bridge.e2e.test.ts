@@ -26,7 +26,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const bridgePath = join(here, "../../sip-bridge/bridge.mjs");
 
 let ca: Server, ariServer: Server, bridge: ChildProcess, assistant: Assistant, store: Store, sip: SipTelephony;
-const ari = { calls: [] as string[], plays: 0, records: 0, deletes: 0, sockets: new Set<WebSocket>() };
+const ari = { calls: [] as string[], plays: 0, records: 0, stops: 0, deletes: 0, talkDetect: "", sockets: new Set<WebSocket>() };
 let recordingsDir = "";
 let bridgeLog = "";
 
@@ -72,12 +72,25 @@ before(async () => {
       emit({ type: "PlaybackFinished", playback: { id } });
       return json({ id });
     }
+    if (req.method === "POST" && (m = u.pathname.match(/^\/ari\/channels\/([^/]+)\/variable$/))) {
+      ari.talkDetect = `${u.searchParams.get("variable")}=${u.searchParams.get("value")}`;
+      res.writeHead(204);
+      return void res.end();
+    }
     if (req.method === "POST" && (m = u.pathname.match(/^\/ari\/channels\/([^/]+)\/record$/))) {
       ari.records++;
       const name = u.searchParams.get("name")!;
       writeFileSync(join(recordingsDir, `${name}.wav`), pcmToWav(Buffer.alloc(16000)));
-      emit({ type: "RecordingFinished", recording: { name } }, 40);
+      // The person starts talking, then stops: Asterisk's talk detector reports both.
+      emit({ type: "ChannelTalkingStarted", channel: { id: m[1] } }, 20);
+      emit({ type: "ChannelTalkingFinished", channel: { id: m[1] }, duration: 900 }, 50);
       return json({ name });
+    }
+    if (req.method === "POST" && (m = u.pathname.match(/^\/ari\/recordings\/live\/([^/]+)\/stop$/))) {
+      ari.stops++;
+      emit({ type: "RecordingFinished", recording: { name: decodeURIComponent(m[1]) } }, 10);
+      res.writeHead(204);
+      return void res.end();
     }
     if (req.method === "DELETE" && (m = u.pathname.match(/^\/ari\/channels\/([^/]+)$/))) {
       ari.deletes++;
@@ -129,6 +142,8 @@ test("the bridge dials through the test context, talks, listens and finishes the
   await until(() => ari.deletes === 1, 5000, "hung up after the goodbye");
   assert.ok(ari.plays >= 2, "spoke the script and the goodbye");
   assert.equal(ari.records, 1, "listened once");
+  assert.equal(ari.talkDetect, "TALK_DETECT(set)=800", "the talk detector is on for the call");
+  assert.equal(ari.stops, 1, "the recording was stopped when the person stopped talking");
   assert.equal(readdirSync(recordingsDir).length, 0, "the reply recording was deleted after transcribing");
   const call = store.calls.get(t.callIds[0])!;
   assert.ok(call.transcript.some((l) => l.who === "contact" && l.text === "yes, ten minutes"));

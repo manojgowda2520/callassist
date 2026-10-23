@@ -100,11 +100,11 @@ test("a full conversation through the contact flow's turns", async () => {
   const t = assign(rig);
   const callId = t.callIds[0];
   const hello = await turn(rig, callId, "answered");
-  assert.match(hello.say, /AI assistant calling for Manoj, on behalf of Mobil80\. You can say stop at any time\./);
+  assert.match(hello.say, /Manoj's AI assistant at Mobil80\. Just a quick one, and you can say stop anytime\./);
   assert.match(hello.say, /bring the visitor badges to reception/);
   assert.equal(hello.end, false);
   const when = await turn(rig, callId, "heard", "Sure, I can do that");
-  assert.match(when.say, /Roughly when will it be done/);
+  assert.match(when.say, /Roughly when do you think it'll be done/);
   assert.equal(when.end, false);
   const bye = await turn(rig, callId, "heard", "in ten minutes");
   assert.match(bye.say, /Perfect, in 10 minutes/);
@@ -229,7 +229,7 @@ test("browser call: accept starts a Connect WebRTC contact; turns flow with live
   assert.equal(w.webStarts[0].attributes.callId, callId, "the Connect flow knows which CallAssist call this is");
   assert.equal(w.webStarts[0].displayName, "Raju");
   const hello = await turn(w as any, callId, "answered");
-  assert.match(hello.say, /AI assistant calling for Manoj/);
+  assert.match(hello.say, /Manoj's AI assistant/);
   assert.ok(w.signals.some((s) => s.type === "caption" && s.who === "assistant" && /AI assistant/.test(s.text)), "captions reach the page");
   await turn(w as any, callId, "heard", "okay");
   const bye = await turn(w as any, callId, "heard", "in five minutes");

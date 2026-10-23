@@ -101,6 +101,8 @@ export class ConnectTelephony implements Telephony {
   }
 
   protected inTurn = new Set<string>();
+  private silent = new Map<string, number>();
+  private lastSaid = new Map<string, string>();
 
   /** One turn from the contact flow. The engine is synchronous, so its reply is ready right after. */
   turn(callId: string, event: "answered" | "heard" | "hangup", text = ""): TurnResult {
@@ -109,14 +111,23 @@ export class ConnectTelephony implements Telephony {
     try {
       if (event === "answered") this.events?.answered(callId);
       else if (event === "heard") {
-        if (text.trim()) this.events?.heard(callId, text);
-        else if (!this.ended.has(callId)) this.queued.get(callId)!.push("Sorry, I didn't catch that. Could you say it again?");
+        if (text.trim()) {
+          this.silent.delete(callId);
+          this.events?.heard(callId, text);
+        } else if (!this.ended.has(callId)) {
+          // Silence: ask the last question again once; after that the conversation decides (retry later, etc.).
+          const n = (this.silent.get(callId) ?? 0) + 1;
+          this.silent.set(callId, n);
+          if (n === 1) this.queued.get(callId)!.push(`Sorry, I didn't catch that. ${lastQuestion(this.lastSaid.get(callId) ?? "")}`);
+          else this.events?.silent?.(callId);
+        }
       } else this.events?.hungUp(callId, "contact");
     } finally {
       this.inTurn.delete(callId);
     }
     const lines = this.queued.get(callId) ?? [];
     this.queued.set(callId, []);
+    if (lines.length) this.lastSaid.set(callId, lines.join(" "));
     const end = event === "hangup" || this.ended.has(callId);
     if (end) this.cleanup(callId);
     return { say: lines.join(" "), end };
@@ -124,9 +135,17 @@ export class ConnectTelephony implements Telephony {
 
   protected cleanup(callId: string): void {
     this.queued.delete(callId);
+    this.silent.delete(callId);
+    this.lastSaid.delete(callId);
     this.contacts.delete(callId);
     setTimeout(() => this.ended.delete(callId), 60_000).unref?.();
   }
+}
+
+/** The last question in what was just said, to repeat after silence. */
+function lastQuestion(said: string): string {
+  const questions = said.match(/[^.!?]*\?/g);
+  return questions?.length ? questions[questions.length - 1].trim() : "Could you say that again?";
 }
 
 /**

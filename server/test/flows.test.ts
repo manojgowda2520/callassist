@@ -21,7 +21,7 @@ test("errand: coffee → Raju says yes in 10 minutes → user is told", async ()
   const t = await until(() => task(go.data.taskId).status === "accepted" && task(go.data.taskId), 3000, "accepted");
   assert.equal(t.eta, "in 10 minutes");
   assert.equal(bot.calls.length, 1);
-  assert.match(bot.heard.get(bot.calls[0])!.join(" "), /AI assistant calling for Manoj/, "AI disclosure first");
+  assert.match(bot.heard.get(bot.calls[0])!.join(" "), /Manoj's AI assistant/, "AI disclosure first");
   assert.ok(notes().some((n) => /Raju is on it.*10 minutes/.test(n)));
   const status = await env.tool("get_task_status", { taskId: t.id });
   assert.match(status.text, /Raju is on it/);

@@ -26,8 +26,12 @@ const cfg = {
   sounds: process.env.SOUNDS_DIR ?? "/var/lib/asterisk/sounds/callassist",
   recordings: process.env.RECORDING_DIR ?? "/var/spool/asterisk/recording",
   callerId: process.env.CALLER_ID ?? "CallAssist",
+  // Fallback only, if Asterisk has no TALK_DETECT: stop recording after this much silence.
   maxSilence: Number(process.env.MAX_SILENCE_SECONDS ?? 2),
   maxReply: Number(process.env.MAX_REPLY_SECONDS ?? 15),
+  // Talk detector: wait this long for the person to start, and end the turn this long after they stop.
+  waitForSpeech: Number(process.env.WAIT_FOR_SPEECH_SECONDS ?? 6),
+  endOfSpeechMs: Number(process.env.END_OF_SPEECH_MS ?? 800),
   // Said the moment the person stops talking, while their reply is transcribed. Empty turns it off.
   ack: process.env.ACK_TEXT ?? "Okay.",
 };
@@ -125,6 +129,8 @@ function connectAriEvents() {
 async function onAriEvent(ev) {
   const chanId = ev.channel?.id;
   const call = chanId && calls.get(chanId);
+  if (call && ev.type === "ChannelTalkingStarted") call.talking = true;
+  if (call && ev.type === "ChannelTalkingFinished") call.talking = false;
   if (ev.type === "StasisStart" && call && !call.answered) {
     call.answered = true;
     log("answered", { callId: call.callId });
@@ -150,7 +156,7 @@ async function placeCall(job) {
       timeout: "45",
       callerId: cfg.callerId,
     });
-    calls.set(ch.id, { callId: job.callId, live: true, answered: false, endedByUs: false });
+    calls.set(ch.id, { callId: job.callId, live: true, answered: false, endedByUs: false, talking: false, talkDetect: false });
     byCallId.set(job.callId, ch.id);
     log("dialing", { callId: job.callId, to: job.phone.replace(/\d(?=\d{4})/g, "•") });
   } catch (e) {
@@ -185,41 +191,66 @@ async function speak(chanId, call, text) {
   await waitFor((e) => (e.type === "PlaybackFinished" && e.playback?.id === pb.id) || (e.type === "ChannelDestroyed" && e.channel?.id === chanId), 60_000);
 }
 
-// Returns what the person said, and the "Okay." playing meanwhile (wait for it before the next line).
+// Records one reply and returns what the person said, plus the "Okay." playing meanwhile
+// (wait for it before the next line). With Asterisk's talk detector the turn waits for the
+// person to start speaking and ends shortly after they stop; without it, a silence timeout ends it.
 async function listen(chanId, call, n) {
-  if (!call.live) return { text: "", ack: Promise.resolve() };
+  const none = { text: "", ack: Promise.resolve() };
+  if (!call.live) return none;
   const name = `callassist-${call.callId.slice(0, 8)}-${n}`;
+  const gone = (e) => e.type === "ChannelDestroyed" && e.channel?.id === chanId;
+  const recorded = (e) => (e.type === "RecordingFinished" || e.type === "RecordingFailed") && e.recording?.name === name;
+  const finished = waitFor((e) => recorded(e) || gone(e), (cfg.maxReply + 5) * 1000);
   await ari("POST", `/channels/${chanId}/record`, {
     name,
     format: "wav",
     maxDurationSeconds: String(cfg.maxReply),
-    maxSilenceSeconds: String(cfg.maxSilence),
+    maxSilenceSeconds: call.talkDetect ? "0" : String(cfg.maxSilence),
     ifExists: "overwrite",
     beep: "false",
     terminateOn: "none",
   });
-  await waitFor(
-    (e) => ((e.type === "RecordingFinished" || e.type === "RecordingFailed") && e.recording?.name === name) || (e.type === "ChannelDestroyed" && e.channel?.id === chanId),
-    (cfg.maxReply + 5) * 1000,
-  );
+  let spoke = true;
+  if (call.talkDetect) {
+    const started = call.talking ? true : await waitFor((e) => (e.type === "ChannelTalkingStarted" && e.channel?.id === chanId) || gone(e), cfg.waitForSpeech * 1000);
+    spoke = started === true || started?.type === "ChannelTalkingStarted";
+    if (spoke && call.live && call.talking) await waitFor((e) => (e.type === "ChannelTalkingFinished" && e.channel?.id === chanId) || recorded(e) || gone(e), cfg.maxReply * 1000);
+    if (call.live) await ari("POST", `/recordings/live/${encodeURIComponent(name)}/stop`).catch(() => {});
+  }
+  await finished;
   call.stoppedAt = Date.now();
   const path = join(cfg.recordings, `${name}.wav`);
-  if (!existsSync(path)) return { text: "", ack: Promise.resolve() };
+  if (!existsSync(path)) return none;
   const audio = readFileSync(path);
-  // Half a second or more recorded: they said something, so acknowledge right away.
-  const ack = cfg.ack && audio.length > 44 + 8000 ? speak(chanId, call, cfg.ack).catch(() => {}) : Promise.resolve();
   // Replies are only kept long enough to transcribe them.
   try {
     unlinkSync(path);
   } catch {}
+  if (!spoke) {
+    log("heard", { callId: call.callId, chars: 0, silent: true });
+    return none;
+  }
+  // They said something, so acknowledge right away while it is transcribed.
+  const ack = cfg.ack && audio.length > 44 + 4000 ? speak(chanId, call, cfg.ack).catch(() => {}) : Promise.resolve();
   const res = await ca("/sip/stt", { method: "POST", headers: { "content-type": "audio/wav" }, body: audio });
   const { text } = await res.json().catch(() => ({ text: "" }));
   log("heard", { callId: call.callId, chars: (text ?? "").length });
   return { text: text ?? "", ack };
 }
 
+/** Turns on Asterisk's talk detector for the call; falls back to silence timeouts if it isn't there. */
+async function enableTalkDetect(chanId, call) {
+  try {
+    await ari("POST", `/channels/${chanId}/variable`, { variable: "TALK_DETECT(set)", value: String(cfg.endOfSpeechMs) });
+    call.talkDetect = true;
+  } catch (e) {
+    log("talk_detect_unavailable", { error: String(e).slice(0, 120) });
+  }
+}
+
 async function runConversation(chanId, call) {
   if (cfg.ack) ensureSound(cfg.ack).catch(() => {});
+  await enableTalkDetect(chanId, call);
   let r = await turn(call.callId, "answered");
   for (let n = 1; call.live && n <= 12; n++) {
     await speak(chanId, call, r.say);

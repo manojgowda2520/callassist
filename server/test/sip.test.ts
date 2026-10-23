@@ -72,7 +72,7 @@ test("a full call over SIP turns, same engine as every other line", async () => 
   const t = r.task();
   const callId = t.callIds[0];
   const hello = await r.turn(callId, "answered");
-  assert.match(hello.say, /AI assistant calling for Manoj/);
+  assert.match(hello.say, /Manoj's AI assistant/);
   await r.turn(callId, "heard", "okay");
   const bye = await r.turn(callId, "heard", "in ten minutes");
   assert.equal(bye.end, true);
@@ -126,4 +126,32 @@ test("silence around a reply is cut before transcribing; pure silence is dropped
   assert.ok(seconds >= 0.5 && seconds <= 1.1, `kept ${seconds}s`);
   assert.equal(trimSilence(samples(3, 60)).length, 0, "only hiss: nothing to transcribe");
   assert.equal(trimSilence(Buffer.alloc(0)).length, 0);
+});
+
+test("sounds like a person: first name, plain ask, no callback number on the SIP line", async () => {
+  const r = await start();
+  const t = r.task();
+  const callId = t.callIds[0];
+  const hello = await r.turn(callId, "answered");
+  assert.match(hello.say, /^Hi Manoj! /, "greets by first name, not 'Manoj Mobile'");
+  assert.match(hello.say, /wondering if you could bring the visitor badges/);
+  await r.turn(callId, "heard", "okay");
+  const bye = await r.turn(callId, "heard", "in ten minutes");
+  assert.ok(!/To reach CallAssist|\+1 555/.test(bye.say), "the SIP number takes no calls, so no callback number is read out");
+});
+
+test("silence: the last question is asked again once, then the conversation decides", async () => {
+  const r = await start();
+  const t = r.task();
+  const callId = t.callIds[0];
+  await r.turn(callId, "answered");
+  const again = await r.turn(callId, "heard", "");
+  assert.equal(again.say, "Sorry, I didn't catch that. Would you be able to do that?");
+  const yes = await r.turn(callId, "heard", "yes");
+  assert.match(yes.say, /Roughly when/);
+  const again2 = await r.turn(callId, "heard", "");
+  assert.match(again2.say, /^Sorry, I didn't catch that\. Roughly when do you think it'll be done\?$/, "repeats the question that was actually asked");
+  const after = await r.turn(callId, "heard", "");
+  assert.equal(after.end, true, "a second silence in a row ends the call politely");
+  assert.equal(r.store.tasks.get(t.id)!.status, "accepted", "the earlier yes is kept");
 });

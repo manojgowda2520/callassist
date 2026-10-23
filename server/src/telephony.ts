@@ -11,6 +11,8 @@ export interface PhoneEvents {
   heard(callId: string, text: string): void;
   /** The person rejected the call or hung up. */
   hungUp(callId: string, byWho: "contact"): void;
+  /** The line stayed silent after we asked again (phone lines that detect silence themselves). */
+  silent?(callId: string): void;
 }
 
 export interface Telephony {
