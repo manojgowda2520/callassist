@@ -158,6 +158,14 @@ Resources:
               - Effect: Allow
                 Action: [polly:SynthesizeSpeech, transcribe:StartStreamTranscription]
                 Resource: "*"
+              # The Alexa+ emulator's language model: Amazon Nova through the US cross-region inference profile.
+              - Effect: Allow
+                Action: [bedrock:InvokeModel]
+                Resource:
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-*
+                  - arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-*
+                  - arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-*
+                  - arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-*
               - !If
                 - HasConnect
                 - Effect: Allow

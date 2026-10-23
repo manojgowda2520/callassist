@@ -18,6 +18,7 @@
     "build:chime": "esbuild scripts/chime-entry.js --bundle --format=esm --minify --platform=browser --external:'node:*' --outfile=public/static/vendor/chime.js"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1155.0",
     "@aws-sdk/client-connect": "^3.1155.0",
     "@aws-sdk/client-polly": "^3.1155.0",
     "@aws-sdk/client-transcribe-streaming": "^3.1155.0",

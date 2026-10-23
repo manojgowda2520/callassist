@@ -13,6 +13,8 @@ import { createHmac, randomBytes } from "node:crypto";
 import { ConnectTelephony, ConnectWebCallTelephony, TelephonyRouter, awsConnectApi } from "./connect.js";
 import { SipBroker, SipTelephony } from "./sip.js";
 import { AwsPhoneSpeech } from "./speech.js";
+import { NovaPlanner } from "./emulator/nova.js";
+import { skillText } from "./ui.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.PORT ?? 8787);
@@ -64,6 +66,10 @@ const assistant = new Assistant(
 // credentials; otherwise the Mac's built-in voices.
 const ttsEngine = process.env.TTS_ENGINE ?? (process.env.PUBLIC_URL?.startsWith("https://") ? "polly" : "say");
 const tts: Tts = ttsEngine === "polly" ? new PollyTts(join(root, "data/local/tts")) : new LocalTts(join(root, "data/local/tts"), process.env.FFMPEG ?? "ffmpeg");
+// The Alexa+ emulator understands free-form requests with Amazon Nova Pro on AWS (ALEXA_BRAIN=rules turns it off;
+// ALEXA_BRAIN=nova turns it on locally with AWS credentials).
+const alexaBrain = process.env.ALEXA_BRAIN ?? (ttsEngine === "polly" ? "nova" : "rules");
+const alexaPlanner = alexaBrain === "nova" ? new NovaPlanner(skillText().body, process.env.ALEXA_MODEL ?? "us.amazon.nova-pro-v1:0") : undefined;
 const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech((process.env.PHONE_VOICE as "Kajal" | undefined) ?? "Kajal", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN", process.env.PHONE_VOICE_ENGINE === "generative" ? "generative" : "neural") : undefined;
 
 // Local secrets (git-ignored). On AWS these live in Secrets Manager.
@@ -121,6 +127,7 @@ const app = createApp({
   phoneSpeech,
   outbox,
   emitMetrics: process.env.EMF === "1",
+  alexaPlanner,
   auth,
   alexaAuth: auth
     ? { tokenUrl: `http://127.0.0.1:${PORT}/oauth/token`, authorizeUrl: `${origin}/oauth/authorize`, clientId: "alexa-plus-emulator", clientSecret: secrets.alexa, resource: `${origin}/mcp`, redirectUri: `${origin}/alexa/callback` }
@@ -128,6 +135,7 @@ const app = createApp({
 });
 
 assistant.start();
+void alexaPlanner?.warm();
 app.listen(PORT, HOST, () => {
   console.log(`CallAssist running on http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);
   console.log(`  Alexa+ emulator  /alexa`);
@@ -135,6 +143,7 @@ app.listen(PORT, HOST, () => {
   console.log(`  Call console     /console`);
   console.log(`  MCP endpoint     /mcp   (phone agent: /agent/mcp)`);
   console.log(`  OAuth            ${authOn ? "on (/oauth/token, /oauth/authorize)" : "OFF (AUTH=off)"}`);
+  console.log(`  Alexa brain      ${alexaPlanner ? `${alexaPlanner.name} + fast rules` : "rules"}`);
   console.log(`  Voices           ${tts.engine}${tts.available ? "" : " (unavailable: browser voices)"}`);
   console.log(`  Phone lines      local demo phones${webCalls ? " + Amazon Connect browser calls" : ""}${connect ? " + Amazon Connect phone calls" : ""} + SIP bridge (default: ${defaultLine})`);
 });

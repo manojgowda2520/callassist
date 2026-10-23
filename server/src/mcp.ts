@@ -355,7 +355,7 @@ export function createMcpServer(a: Assistant, log: (e: Record<string, unknown>) 
         confirmed,
         confirmationToken,
         () => ({
-          speech: `I'll call ${p.contact.name} and say: "${msg}"${q ? ` and ask: ${q}` : ""}.${late ? ` ${late}` : ""} Shall I go ahead?`,
+          speech: `I'll call ${p.contact.name} and say: "${msg}"${q ? ` and ask: "${q}"` : ""}.${late ? ` ${late}` : ""} Shall I go ahead?`,
           data: { person: p.contact.name, personRole: p.contact.label, message: msg, question: q, ...(late ? { afterHours: late } : {}) },
         }),
         () => ({

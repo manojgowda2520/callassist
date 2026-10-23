@@ -17,6 +17,7 @@ import type { ConnectTelephony, ConnectWebCallTelephony } from "./connect.js";
 import type { SipTelephony } from "./sip.js";
 import type { PhoneSpeech } from "./speech.js";
 import type { Tts } from "./tts.js";
+import type { Planner } from "./emulator/nova.js";
 
 export interface AppOptions {
   assistant: Assistant;
@@ -42,6 +43,8 @@ export interface AppOptions {
   accountFor?: (sub: string) => Assistant | undefined;
   /** How the emulator signs in (as Alexa+ would). Needed when auth is on. */
   alexaAuth?: AlexaAuthOptions;
+  /** The emulator's language model (Amazon Nova Pro). Without it the emulator understands with rules only. */
+  alexaPlanner?: Planner;
   /** Amazon Connect line, when configured: its contact-flow Lambda posts each turn to /connect/turn. */
   connect?: ConnectTelephony;
   /** Amazon Connect browser calling (WebRTC), when configured. */
@@ -319,7 +322,7 @@ export function createApp(opts: AppOptions) {
   let brain: AlexaBrain | undefined;
   const getBrain = async () => {
     if (!opts.selfMcpUrl) throw new Error("selfMcpUrl not set");
-    brain ??= new AlexaBrain(opts.selfMcpUrl, (t) => trafficSubs.forEach((fn) => fn(t)), opts.alexaAuth ? new AlexaAccount(opts.alexaAuth) : undefined);
+    brain ??= new AlexaBrain(opts.selfMcpUrl, (t) => trafficSubs.forEach((fn) => fn(t)), opts.alexaAuth ? new AlexaAccount(opts.alexaAuth) : undefined, opts.alexaPlanner);
     await brain.connect();
     return brain;
   };

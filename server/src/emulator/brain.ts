@@ -1,10 +1,13 @@
-// The local Alexa+ emulator's "brain". Real Alexa+ uses a large language model
-// to pick tools; this stand-in understands common phrasings with rules, so the
-// whole demo runs offline. It talks to the CallAssist MCP server over real MCP
-// (Streamable HTTP), presenting itself the way the Alexa+ client does.
+// The local Alexa+ emulator's "brain". Like Alexa+, it uses a language model
+// (Amazon Nova Pro, see nova.ts) to pick tools from what people actually say.
+// Common phrases and yes/no go through fast rules instead, and the rules are the
+// fallback when the model is slow or offline, so the demo always works. It talks
+// to the CallAssist MCP server over real MCP (Streamable HTTP), presenting
+// itself the way the Alexa+ client does.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Planner } from "./nova.js";
 import { createHash, randomBytes } from "node:crypto";
 
 /** How the emulator signs in to CallAssist, the same way Alexa+ does. */
@@ -125,6 +128,8 @@ export interface AppView {
 
 export interface Turn {
   speech: string;
+  /** What understood the request: the fast rules, the language model, or the rules after the model failed. */
+  brain?: string;
   card?: Record<string, unknown>;
   ui?: AppView;
   tools: ToolTrace[];
@@ -139,6 +144,7 @@ interface TeamMember {
 
 interface Session {
   pending?: { tool: string; args: Record<string, unknown> };
+  history: { who: "user" | "alexa"; text: string }[];
   lastTaskId?: string;
   lastPerson?: string;
 }
@@ -147,6 +153,18 @@ export const LINK_SPEECH = "To use CallAssist, link your account in the Alexa ap
 
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|please do|confirm|correct|right|haan|ha|yes please|go for it|absolutely|of course)\b/;
 const NO = /^(no|nope|nah|don't|do not|never mind|nevermind|stop|cancel that|not now|wait)\b/;
+
+/** Read-only and follow-up requests are short and predictable: the rules answer them instantly. */
+const QUICK_TOOLS = new Set(["list_tasks", "get_task_status", "list_team", "list_errands", "follow_up", "cancel_task"]);
+/** The phrases suggested on screen (public/alexa.html) always take the instant path, so the demo is repeatable. */
+const SUGGESTED = new Set(
+  [
+    "Get me a coffee",
+    "Ask Raju to set up the meeting room by 3 pm",
+    "Tell Grandma I'll pick her up at 5 and ask if she needs anything from the store",
+    "Have Lakshmi make dinner for 4 people tonight",
+  ].map((p) => normalize(p)),
+);
 
 /** Alexa+ sends protocol 2025-03-26 with this client name; we copy that. */
 function alexaLikeFetch(onTraffic: (t: McpTraffic) => void, account?: AlexaAccount): typeof fetch {
@@ -198,6 +216,8 @@ export class AlexaBrain {
   private client?: Client;
   private team: TeamMember[] = [];
   private triggers: string[] = [];
+  private errands: string[] = [];
+  private tools: Tool[] = [];
   private user = "the user";
   private sessions = new Map<string, Session>();
   negotiatedVersion?: string;
@@ -206,6 +226,7 @@ export class AlexaBrain {
     private mcpUrl: string,
     private onTraffic: (t: McpTraffic) => void = () => {},
     readonly account?: AlexaAccount,
+    readonly planner?: Planner,
   ) {}
 
   async connect(): Promise<void> {
@@ -229,6 +250,7 @@ export class AlexaBrain {
   async listTools() {
     await this.connect();
     const tools = (await this.client!.listTools()).tools;
+    this.tools = tools;
     for (const t of tools) {
       const meta = t._meta as { ui?: { resourceUri?: string } } | undefined;
       if (meta?.ui?.resourceUri) this.uiByTool.set(t.name, meta.ui.resourceUri);
@@ -257,7 +279,9 @@ export class AlexaBrain {
     if (typeof team.result?.user === "string") this.user = team.result.user;
     this.team = ((team.result?.contacts as TeamMember[] | undefined) ?? []).map((c) => ({ ...c, aliases: c.aliases ?? [] }));
     const errands = await this.call("list_errands", {});
-    this.triggers = [...new Set(((errands.result?.errands as { triggers: string[] }[] | undefined) ?? []).flatMap((e) => e.triggers))];
+    const list = (errands.result?.errands as { name: string; place?: string; triggers: string[] }[] | undefined) ?? [];
+    this.triggers = [...new Set(list.flatMap((e) => e.triggers))];
+    this.errands = list.map((e) => (e.place ? `${e.name} (${e.place})` : e.name));
   }
 
   async call(tool: string, args: Record<string, unknown>): Promise<ToolTrace> {
@@ -276,14 +300,21 @@ export class AlexaBrain {
 
   session(id: string): Session {
     let s = this.sessions.get(id);
-    if (!s) this.sessions.set(id, (s = {}));
+    if (!s) this.sessions.set(id, (s = { history: [] }));
     return s;
   }
 
   /** Handle one thing the user said. */
   async handle(sessionId: string, raw: string): Promise<Turn> {
-    await this.connect();
     const s = this.session(sessionId);
+    const turn = await this.respond(s, raw);
+    if (raw.trim()) s.history.push({ who: "user", text: raw.trim().slice(0, 300) }, { who: "alexa", text: turn.speech });
+    s.history.splice(0, Math.max(0, s.history.length - 12));
+    return turn;
+  }
+
+  private async respond(s: Session, raw: string): Promise<Turn> {
+    await this.connect();
     const u = normalize(raw);
     if (this.account && !this.account.linked) return { speech: LINK_SPEECH, card: { tool: "link", reason: "link_required" }, tools: [], expectsReply: false };
     if (!this.team.length) await this.refresh().catch(() => {});
@@ -299,13 +330,34 @@ export class AlexaBrain {
         s.pending = undefined;
         return { speech: "Okay, I won't.", tools: [], expectsReply: false };
       }
-      s.pending = undefined; // a new request replaces the pending one
     }
+    // Anything else replaces the pending read-back, unless the model reads it as a correction to it.
+    const previous = s.pending;
+    s.pending = undefined;
 
-    const intent = this.understand(u, s);
+    // Fast rules for yes/no-style and read-only requests; the model for everything said freely.
+    const rule = this.understand(u, s);
+    let intent: { tool: string; args: Record<string, unknown>; answer?: string } | undefined;
+    let brain = "rules";
+    if (rule && (QUICK_TOOLS.has(rule.tool) || SUGGESTED.has(u) || !this.planner)) intent = rule;
+    else if (this.planner) {
+      try {
+        if (!this.tools.length) await this.listTools();
+        const plan = await this.planner.plan(raw.trim(), this.tools, { user: this.user, team: this.team, errands: this.errands, lastPerson: s.lastPerson, history: [...s.history], pending: previous });
+        brain = this.planner.name;
+        if ("speech" in plan) return { speech: plan.speech, brain, tools: [], expectsReply: /\?\s*$/.test(plan.speech) };
+        intent = { tool: plan.tool, args: plan.args, answer: plan.tool === "deliver_message" && typeof plan.args.message === "string" ? plan.args.message : undefined };
+      } catch (err) {
+        console.log(JSON.stringify({ at: new Date().toISOString(), event: "alexa_model_fallback", error: String(err).slice(0, 200) }));
+        intent = rule;
+        brain = "rules (model unavailable)";
+        if (!intent) s.pending = previous;
+      }
+    }
     if (!intent) {
       return {
         speech: "I can give someone on your team a task, run an errand like getting you a coffee, pass on a message, or check on your tasks. What would you like?",
+        brain,
         tools: [],
         expectsReply: true,
       };
@@ -315,9 +367,9 @@ export class AlexaBrain {
       const open = await this.call("list_tasks", { filter: "open", person: intent.args.person });
       const tasks = (open.result?.tasks as { status: string; taskId: string }[] | undefined) ?? [];
       const waiting = tasks.find((t) => t.status === "blocked");
-      if (waiting) return this.run(s, "answer_question", { taskId: waiting.taskId, answer: intent.answer });
+      if (waiting) return { ...(await this.run(s, "answer_question", { taskId: waiting.taskId, answer: intent.answer })), brain };
     }
-    return this.run(s, intent.tool, intent.args);
+    return { ...(await this.run(s, intent.tool, intent.args)), brain };
   }
 
   private async run(s: Session, tool: string, args: Record<string, unknown>): Promise<Turn> {
