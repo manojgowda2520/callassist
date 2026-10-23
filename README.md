@@ -4,8 +4,10 @@ CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people 
 
 > Status: built for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges). Live on AWS: **try it at https://callassist.mobil80.com/try** (Alexa+ emulator and demo phones side by side, no setup). It also runs fully on your computer.
 
+**For reviewers:** the MCP server is `POST /mcp` (Streamable HTTP, MCP spec 2025-11-25, also negotiates 2025-03-26 for the Alexa+ client), live at `https://callassist.mobil80.com/mcp` with OAuth metadata at `/.well-known/oauth-authorization-server`. Entry points: [`server/src/mcp.ts`](server/src/mcp.ts) (the 10 tools, MCP Apps card, prompt), [`server/src/app.ts`](server/src/app.ts) (the `/mcp` route), [`skills/callassist/SKILL.md`](skills/callassist/SKILL.md) (the Agent Skill), and [`server/src/emulator/`](server/src/emulator/) (the simulated Alexa+ client: a real MCP client, with Amazon Nova Pro picking tools). Run it with `cd server && npm install && npm run dev`, then open http://localhost:8787/try.
+
 ```
- A  You          "Alexa, ask Raju to set up the meeting room by 3."
+ A  You          "Alexa, ask Raju to bring tea and snacks to the meeting room by 3."
  B  Alexa+       reads it back, waits for your "yes"
  C  CallAssist   calls Raju in an AI voice, gets "okay, by 3", follows up at 3, reports back
  D  Your team    Raju answers his normal phone. No app. He can call back any time.
