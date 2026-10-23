@@ -18,7 +18,7 @@
   .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
   .badge { border: 1px solid #ffffff33; background: #ffffff10; color: #dfe6f3; border-radius: 999px; padding: 6px 12px; font-size: 13px; max-width: 100%; }
   .hero h1 { font-size: clamp(38px, 6vw, 68px); line-height: 1.03; margin: 0 0 18px; letter-spacing: -1.5px; }
-  .hero h1 span { color: var(--alexa); }
+  .hero h1 span { background: linear-gradient(90deg, #5eead4, #60a5fa, #c084fc, #f472b6); -webkit-background-clip: text; color: transparent; }
   .hero p { color: #b9c3d6; font-size: 20px; line-height: 1.5; max-width: 720px; margin: 0 0 30px; }
   .cta { display: flex; flex-wrap: wrap; gap: 12px; }
   .cta a { padding: 13px 20px; border-radius: 12px; font-weight: 650; font-size: 16px; }
@@ -66,7 +66,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="logo"><span class="dot"></span>CallAssist</div>
+  <div class="logo"><img class="mark" src="/static/logo.svg" alt="" width="26" height="26">CallAssist</div>
   <nav><a href="#live">Live demo</a><a href="#video">Video</a><a href="#how">How it works</a><a href="#fit">MCP &amp; hackathon</a><a href="#arch">Architecture</a><a href="#safety">Safety</a><a href="https://github.com/manojgowda2520/callassist" target="_blank" rel="noopener">GitHub</a></nav>
 </header>
 
@@ -74,9 +74,10 @@
   <div class="wrap">
     <div class="badges">
       <span class="badge">Amazon Developer Hackathon 2026 · Build, Ship, Shape</span>
-      <span class="badge">Alexa+ track</span><span class="badge">AWS Builder</span><span class="badge">Open Source</span>
+      <span class="badge">Alexa+ track</span><span class="badge">AWS Builder</span><span class="badge">Open Source</span><span class="badge">Built on AWS · Made for Alexa+</span>
     </div>
-    <h1>Your personal assistant,<br><span>on the phone.</span></h1>
+    <img src="/static/logo.svg" alt="CallAssist logo" width="76" height="76" style="border-radius:20px;box-shadow:0 10px 40px #8b5cf655;margin-bottom:18px">
+    <h1>Just ask.<br><span>It makes the call.</span></h1>
     <p>CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people for you. Tell Alexa what needs doing. CallAssist calls the right person, hands over the task, gets a yes and a time, follows up, and tells you when it's done.</p>
     <div class="cta">
       <a class="primary" href="#live">Try it now, no setup</a>
@@ -125,7 +126,7 @@
     <p class="sub">The Alexa+ experience uses Amazon Nova Pro on Amazon Bedrock to pick the right CallAssist tool from whatever you say. Common phrases and "yes" take an instant path.</p>
     <div class="say">
       <span>"Get me a coffee."</span><span>"Could you get me a chai? I'm stuck in a meeting."</span><span>"Ask Raju to bring tea and snacks to the meeting room by 3."</span>
-      <span>"Tell Grandma I'll pick her up at 5 and ask if she needs anything."</span><span>"Can the driver bring the car round to the front?"</span><span>"Can Neeta book a meeting with the client tomorrow at 11?"</span>
+      <span>"Tell Grandma I'll pick her up at 5 and ask if she needs anything."</span><span>"Can the driver bring the car round to the front?"</span><span>"Check with Neeta when she's free to meet me tomorrow"</span>
       <span>"What's pending?"</span><span>"Any update from Raju?"</span><span>"Follow up with the driver."</span><span>"Tell him it's room 3."</span><span>"Cancel the coffee."</span>
     </div>
   </div>

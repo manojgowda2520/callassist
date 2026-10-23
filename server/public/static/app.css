@@ -30,7 +30,7 @@ button { font: inherit; cursor: pointer; }
   background: #0f1115; color: #fff; position: sticky; top: 0; z-index: 10;
 }
 .topbar .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
-.topbar .logo .dot { width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(from 200deg, #1ec8f0, #0a7cff, #1ec8f0); box-shadow: 0 0 12px #1ec8f088; }
+.topbar .logo .mark { width: 26px; height: 26px; border-radius: 7px; box-shadow: 0 0 14px #8b5cf666; }
 .topbar nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .topbar nav a { color: #c9ced8; padding: 6px 12px; border-radius: 8px; font-size: 14px; }
 .topbar nav a.active, .topbar nav a:hover { background: #262a33; color: #fff; }

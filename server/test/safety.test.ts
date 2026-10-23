@@ -216,13 +216,14 @@ test("Alexa retrying the same confirmed call doesn't call twice (idempotency)", 
 });
 
 test("every call names the business, offers stop, and gives a callback number", async () => {
+  env.store.business!.callback = "+91 80 4000 0000"; // a deployment sets its real callback line
   const bot = workerBot(env, "c_raju", ["yes 10 minutes"]);
   const r = await env.tool("run_errand", { request: "coffee", confirmed: true });
   await until(() => env.store.tasks.get(r.data.taskId)!.status === "accepted");
   await until(() => env.store.activeCalls().length === 0);
   const said = env.store.calls.get(bot.calls[0])!.transcript.filter((l) => l.who === "assistant").map((l) => l.text);
   assert.match(said[0], /Madhu's AI assistant at Mobil80\. Just a quick one, and you can say stop anytime\./);
-  assert.match(said.at(-1)!, /To reach CallAssist, call \+1 555 010 0000/);
+  assert.match(said.at(-1)!, /To reach CallAssist, call \+91 80 4000 0000/);
 });
 
 test("opt-out is timestamped for the do-not-call record", async () => {

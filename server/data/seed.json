@@ -192,7 +192,6 @@
   ],
   "defaultPlace": "office",
   "business": {
-    "name": "Mobil80",
-    "callback": "+1 555 010 0000"
+    "name": "Mobil80"
   }
 }

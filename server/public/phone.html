@@ -75,7 +75,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
+  <div class="logo"><img class="mark" src="/static/logo.svg" alt="" width="26" height="26">CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
   <nav><a href="/try">Try it</a><a href="/alexa">Alexa+ emulator</a><a href="/phones" class="active">Team phones</a><a href="/console">Call console</a></nav>
 </header>
 <div class="wrap">
@@ -98,7 +98,7 @@
             <div class="ava-big">CA</div>
             <div class="who">CallAssist</div>
             <div class="what" id="incWhat">AI assistant</div>
-            <div class="num">+1 (555) 010-0000 · mobile</div>
+            <div class="num">AI assistant call</div>
           </div>
           <div class="inc-btns">
             <div><button class="rbtn dec" id="decline" aria-label="Decline"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9Z"/></svg></button><div class="rlabel">Decline</div></div>
@@ -276,7 +276,7 @@ stream(`/api/phone/${contactId}/events`, {
   hello: (h) => {
     me = h.contact; user = h.user;
     $("me").textContent = `${me.name}'s phone`;
-    $("role").textContent = `${me.label} · ${me.phone}`;
+    $("role").textContent = me.label;
     $("caption").textContent = `This is ${me.name}'s phone. CallAssist calls here when ${user} needs something.`;
     document.title = `${me.name}'s phone · CallAssist`;
     refreshTasks();

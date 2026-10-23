@@ -32,7 +32,7 @@ export interface Contact {
 /** The business responsible for the calls (47 CFR 64.1200(b)). */
 export interface Business {
   name: string;
-  callback: string;
+  callback?: string;
 }
 
 export interface Errand {

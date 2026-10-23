@@ -34,6 +34,7 @@ afterEach(async () => {
 
 async function start(opts: { failStart?: boolean; ringTimeoutMs?: number } = {}): Promise<Rig> {
   const seed = structuredClone(SEED);
+  seed.business = { ...seed.business!, callback: "+91 80 4000 0000" };
   seed.contacts.push({ id: "c_maya", name: "Maya", label: "volunteer", aliases: [], phone: "+12065550123", consent: true, optedOut: false, line: "connect", consentRecord: { at: "2026-10-22T00:00:00Z", method: "written", wording: "AI-voice calls ok" } });
   const store = new Store(seed);
   const started: Rig["started"] = [];
