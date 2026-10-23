@@ -4,7 +4,7 @@
 import { CLOSED_TASK, FINAL_CALL, type CallPurpose, type CallRecord, type Contact, type Store, type Task, type TaskKind } from "./store.js";
 import type { Telephony } from "./telephony.js";
 import { readWorker, type WorkerReading } from "./understand.js";
-import { formatClock, type ParsedTime } from "./time.js";
+import { formatClock, parseTime, type ParsedTime } from "./time.js";
 import { Confirmations } from "./confirm.js";
 import { renderEmail, type Mailer } from "./email.js";
 
@@ -338,7 +338,8 @@ export class Assistant {
       }
       case "accept":
       case "eta_only": {
-        const eta = reading.eta ?? (task.dueText ? { text: task.dueText, at: task.dueAt ? new Date(task.dueAt) : undefined } : undefined);
+        // On a call relaying the user's answer, only a time in that answer ("book it for 11:30") counts; the original due time is stale.
+        const eta = reading.eta ?? (conv?.answer ? parseTime(conv.answer, new Date()) : task.dueText ? { text: task.dueText, at: task.dueAt ? new Date(task.dueAt) : undefined } : undefined);
         if (!eta && conv && !conv.askedEta && task.kind === "task") {
           conv.askedEta = true;
           this.store.updateTask(task.id, { status: "accepted", reply: reading.text });

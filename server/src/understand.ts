@@ -33,7 +33,9 @@ export function readWorker(raw: string, now = new Date()): WorkerReading {
     return { intent: "decline", eta, text };
 
   const question = /\?\s*$/.test(text) || has(s, /^ (which|what|where|when|who|whom|how|why|should i|do you want|is it|are you|can you tell|tell me)\b/);
-  const accept = has(s, /\b(yes|yeah|yep|yup|sure|ok|okay|fine|alright|all right|will do|on it|on my way|coming|right away|no problem|got it|haan|han ji|ha ji|theek|of course|absolutely|i can|i will|i'll)\b/);
+  // "Is that OK?" asks; it doesn't agree. Judge agreement on what comes before a closing question.
+  const statement = question ? s.replace(/[^.!?]*\?\s*$/, " ") : s;
+  const accept = has(statement, /\b(yes|yeah|yep|yup|sure|ok|okay|fine|alright|all right|will do|on it|on my way|coming|right away|no problem|got it|haan|han ji|ha ji|theek|of course|absolutely|i can|i will|i'll)\b/);
 
   if (question && !accept) return { intent: "question", eta, text };
   if (accept) return { intent: "accept", eta, text };
