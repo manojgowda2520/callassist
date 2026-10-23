@@ -85,3 +85,13 @@ test("the model never gets to confirm a call itself", async () => {
   assert.ok(!/Calling/.test(t.speech));
   await brain.close();
 });
+
+test("the model can't claim an action in words: a recognised request still runs the real tool", async () => {
+  const model = new FakeModel(() => ({ speech: "I've called Neeta and she has confirmed the meeting." }));
+  const brain = new AlexaBrain(`${env.url}/mcp`, undefined, undefined, model);
+  const t = await brain.handle("n6", "Ask Raju to bring the visitor badges by 5 pm");
+  assert.equal(t.tools[0]?.tool, "assign_task", "the rules' tool ran");
+  assert.match(t.speech, /Shall I go ahead/, "the user hears the real read-back, not the model's claim");
+  assert.match(t.brain ?? "", /→ rules/);
+  await brain.close();
+});

@@ -345,8 +345,13 @@ export class AlexaBrain {
         if (!this.tools.length) await this.listTools();
         const plan = await this.planner.plan(raw.trim(), this.tools, { user: this.user, team: this.team, errands: this.errands, lastPerson: s.lastPerson, history: [...s.history], pending: previous });
         brain = this.planner.name;
-        if ("speech" in plan) return { speech: plan.speech, brain, tools: [], expectsReply: /\?\s*$/.test(plan.speech) };
-        intent = { tool: plan.tool, args: plan.args, answer: plan.tool === "deliver_message" && typeof plan.args.message === "string" ? plan.args.message : undefined };
+        // Words alone never stand in for an action: if the rules recognised a request, run that tool instead,
+        // so the model can't say "I've called Neeta" without a call.
+        if ("speech" in plan && rule) {
+          intent = rule;
+          brain = `${brain} → rules`;
+        } else if ("speech" in plan) return { speech: plan.speech, brain, tools: [], expectsReply: /\?\s*$/.test(plan.speech) };
+        else intent = { tool: plan.tool, args: plan.args, answer: plan.tool === "deliver_message" && typeof plan.args.message === "string" ? plan.args.message : undefined };
       } catch (err) {
         console.log(JSON.stringify({ at: new Date().toISOString(), event: "alexa_model_fallback", error: String(err).slice(0, 200) }));
         intent = rule;

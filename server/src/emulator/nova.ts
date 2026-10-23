@@ -80,7 +80,7 @@ export class NovaPlanner implements Planner {
       }
       const speech = content.map((c) => c.text ?? "").join(" ").trim();
       // Only the server's read-back can lead to a call; a model imitating one is treated as a miss.
-      if (speech && !/shall i go ahead|should i go ahead|want me to (go ahead|call)/i.test(speech)) return { speech };
+      if (speech && !/shall i go ahead|should i go ahead|want me to (go ahead|call)|\bi('ve| have)? (called|phoned|messaged|told)\b|\bi'll call\b|\bcalling\b|\b(is|are) on it\b|has (confirmed|agreed|scheduled|booked)/i.test(speech)) return { speech };
       throw new Error("empty model reply");
     } finally {
       clearTimeout(timer);
