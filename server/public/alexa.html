@@ -7,6 +7,7 @@
 <link rel="icon" href="/static/icon.svg">
 <link rel="stylesheet" href="/static/app.css">
 <style>
+  body.embed .topbar { display: none; }
   main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
   @media (max-width: 1050px) { main { grid-template-columns: minmax(0, 1fr); } }
 
@@ -113,7 +114,7 @@
 <header class="topbar">
   <div class="logo"><span class="dot"></span>CallAssist <span class="muted" style="font-weight:500">local demo</span></div>
   <nav>
-    <a href="/alexa" class="active">Alexa+ emulator</a>
+    <a href="/try">Try it</a><a href="/alexa" class="active">Alexa+ emulator</a>
     <a href="/phones" target="_blank">Team phones</a>
     <a href="/console" target="_blank">Call console</a>
     <a href="/">About</a>
@@ -222,6 +223,10 @@ document.addEventListener("keydown", (e) => { if (e.code === "Space" && document
 
 $("form").onsubmit = (e) => { e.preventDefault(); const t = $("input").value.trim(); if (t) { micMode = false; say(t); $("input").value = ""; } };
 $("wakeBtn").onclick = () => { tones.unlock(); $("wake").remove(); voice.push("Hi Manoj. What can I take care of?", "/tts?voice=alexa&text=" + encodeURIComponent("Hi Manoj. What can I take care of?")); };
+
+// The /try page drives this emulator from its guided steps.
+window.say = (text) => say(text);
+if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
 
 async function say(text) {
   $("said").textContent = `“${text}”`;

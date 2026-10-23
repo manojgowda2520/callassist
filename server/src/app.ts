@@ -419,6 +419,7 @@ export function createApp(opts: AppOptions) {
   const page = (file: string) => (_req: Request, res: Response) => res.sendFile(join(opts.publicDir, file));
   app.get("/", page("index.html"));
   app.get("/alexa", page("alexa.html"));
+  app.get("/try", page("try.html"));
   app.get("/console", page("console.html"));
   app.get("/phone/:contactId", page("phone.html"));
   app.get("/phones", page("phones.html"));
