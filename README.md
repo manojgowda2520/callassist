@@ -2,7 +2,7 @@
 
 CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people for you. Tell Alexa what needs doing. CallAssist calls the right person on your team, explains the job, gets a yes and a time, follows up after the deadline, and tells you when it's done.
 
-> Status: built for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges). Live on AWS: **try it at https://d33lj83jn4hb7a.cloudfront.net/try** (Alexa+ emulator and demo phones side by side, no setup). It also runs fully on your computer.
+> Status: built for the Amazon "Build, Ship, Shape" hackathon (Alexa+ track, plus the AWS Builder and Open Source mini challenges). Live on AWS: **try it at https://callassist.mobil80.com/try** (Alexa+ emulator and demo phones side by side, no setup). It also runs fully on your computer.
 
 ```
  A  You          "Alexa, ask Raju to set up the meeting room by 3."
