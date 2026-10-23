@@ -78,7 +78,7 @@ export class ConnectTelephony implements Telephony {
   ring(call: CallRecord): void {
     this.queued.set(call.id, []);
     this.api
-      .startCall({ destination: call.phone, attributes: { callId: call.id, purpose: call.purpose } })
+      .startCall({ destination: call.phone, attributes: { callId: call.id, purpose: call.purpose, opening: call.script.join(" ") } })
       .then(({ contactId }) => {
         this.contacts.set(call.id, contactId);
         this.log({ event: "connect_call_started", callId: call.id, contactId });

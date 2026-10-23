@@ -150,6 +150,8 @@ async function onAriEvent(ev) {
 // ---------------------------------------------------------------- one call
 async function placeCall(job) {
   if (byCallId.has(job.callId)) return;
+  // Make the opening line's audio while the phone rings, so there is no silence when they pick up.
+  if (job.opening) ensureSound(job.opening).catch(() => {});
   try {
     const ch = await ari("POST", "/channels", {
       endpoint: `Local/${job.phone}@${cfg.context}`,

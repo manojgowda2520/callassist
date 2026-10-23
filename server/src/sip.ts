@@ -6,7 +6,8 @@
 import type { Response } from "express";
 import { ConnectTelephony, type ConnectApi } from "./connect.js";
 
-export type BridgeJob = { type: "call"; callId: string; phone: string; purpose: string } | { type: "hangup"; callId: string };
+/** opening: what CallAssist says first, so the bridge can make the audio while the phone rings. */
+export type BridgeJob = { type: "call"; callId: string; phone: string; purpose: string; opening?: string } | { type: "hangup"; callId: string };
 
 /** Holds the connected bridge(s) and hands them jobs. Doubles as the line's "API". */
 export class SipBroker implements ConnectApi {
@@ -43,7 +44,7 @@ export class SipBroker implements ConnectApi {
   }
 
   async startCall({ destination, attributes }: { destination: string; attributes: Record<string, string> }) {
-    this.send({ type: "call", callId: attributes.callId, phone: destination, purpose: attributes.purpose ?? "assign" });
+    this.send({ type: "call", callId: attributes.callId, phone: destination, purpose: attributes.purpose ?? "assign", opening: attributes.opening });
     return { contactId: attributes.callId };
   }
 

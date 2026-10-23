@@ -64,7 +64,8 @@ test("a contact on the SIP line becomes a call job for the bridge", async () => 
   const r = await start();
   const t = r.task();
   await until(() => r.jobs.length === 1);
-  assert.deepEqual(r.jobs[0], { type: "call", callId: t.callIds[0], phone: "+919800000000", purpose: "assign" });
+  assert.deepEqual({ ...r.jobs[0], opening: undefined }, { type: "call", callId: t.callIds[0], phone: "+919800000000", purpose: "assign", opening: undefined });
+  assert.match((r.jobs[0] as { opening?: string }).opening ?? "", /^Hi Madhu! .*Would you be able to do that\?$/, "the opening line travels with the job, for audio made while it rings");
 });
 
 test("a full call over SIP turns, same engine as every other line", async () => {
