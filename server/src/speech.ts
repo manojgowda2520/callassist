@@ -30,6 +30,38 @@ export function pcmToWav(pcm: Buffer, sampleRate = 8000): Buffer {
   return Buffer.concat([header, pcm]);
 }
 
+/**
+ * Cuts the silence around speech in 8 kHz 16-bit mono PCM, so Transcribe (which reads at about real
+ * time) doesn't spend seconds on the pause that ended the recording. Returns an empty buffer when
+ * nothing louder than line noise was said.
+ */
+export function trimSilence(pcm: Buffer, sampleRate = 8000): Buffer {
+  const frame = Math.floor(sampleRate / 50) * 2; // 20 ms, in bytes
+  const frames = Math.floor(pcm.length / frame);
+  if (frames === 0) return Buffer.alloc(0);
+  const rms: number[] = [];
+  for (let f = 0; f < frames; f++) {
+    let sum = 0;
+    for (let i = f * frame; i < (f + 1) * frame; i += 2) {
+      const v = pcm.readInt16LE(i);
+      sum += v * v;
+    }
+    rms.push(Math.sqrt(sum / (frame / 2)));
+  }
+  // Speech is anything well above the quietest part of the line, and above a floor for hiss.
+  const sorted = [...rms].sort((a, b) => a - b);
+  const noise = sorted[Math.floor(sorted.length * 0.1)];
+  const threshold = Math.max(200, noise * 3);
+  const first = rms.findIndex((r) => r > threshold);
+  if (first < 0) return Buffer.alloc(0);
+  let last = rms.length - 1;
+  while (rms[last] <= threshold) last--;
+  // Keep 200 ms before and 300 ms after, so soft word starts and endings survive.
+  const from = Math.max(0, first - 10) * frame;
+  const to = Math.min(frames, last + 1 + 15) * frame;
+  return pcm.subarray(from, to);
+}
+
 /** Raw PCM samples from a WAV file (finds the "data" chunk), or the buffer itself if it isn't WAV. */
 export function wavToPcm(buf: Buffer): Buffer {
   if (buf.length < 12 || buf.toString("ascii", 0, 4) !== "RIFF") return buf;
@@ -50,6 +82,8 @@ export class AwsPhoneSpeech implements PhoneSpeech {
   constructor(
     private voice: VoiceId = "Matthew",
     private language: LanguageCode = "en-IN",
+    /** "neural" answers in a few hundred ms; "generative" sounds richer but is slower, and phone audio is 8 kHz anyway. */
+    private engine: "neural" | "generative" = "neural",
     region = process.env.AWS_REGION ?? "us-east-1",
   ) {
     this.polly = new PollyClient({ region });
@@ -58,15 +92,15 @@ export class AwsPhoneSpeech implements PhoneSpeech {
 
   async wav8k(text: string): Promise<Buffer> {
     const out = await this.polly.send(
-      new SynthesizeSpeechCommand({ Engine: "generative", VoiceId: this.voice, OutputFormat: "pcm", SampleRate: "8000", Text: text.slice(0, 1500), TextType: "text" }),
+      new SynthesizeSpeechCommand({ Engine: this.engine, VoiceId: this.voice, OutputFormat: "pcm", SampleRate: "8000", Text: text.slice(0, 1500), TextType: "text" }),
     );
     if (!out.AudioStream) throw new Error("Polly returned no audio");
     return pcmToWav(Buffer.from(await out.AudioStream.transformToByteArray()), 8000);
   }
 
   async transcribe(audio: Buffer): Promise<string> {
-    const pcm = wavToPcm(audio);
-    if (pcm.length < 1600) return ""; // under 0.1 s: nothing said
+    const pcm = trimSilence(wavToPcm(audio));
+    if (pcm.length < 1600) return ""; // under 0.1 s of speech: nothing said
     async function* chunks() {
       for (let i = 0; i < pcm.length; i += 3200) yield { AudioEvent: { AudioChunk: pcm.subarray(i, i + 3200) } };
     }

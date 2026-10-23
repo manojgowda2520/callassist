@@ -13,7 +13,7 @@ import { Store } from "../src/store.js";
 import { LocalPhoneNetwork } from "../src/telephony.js";
 import { TelephonyRouter } from "../src/connect.js";
 import { SipBroker, SipTelephony, type BridgeJob } from "../src/sip.js";
-import { pcmToWav, wavToPcm, type PhoneSpeech } from "../src/speech.js";
+import { pcmToWav, trimSilence, wavToPcm, type PhoneSpeech } from "../src/speech.js";
 import { FAST, SEED, until } from "./helpers.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -111,4 +111,19 @@ test("WAV helpers round-trip and survive non-WAV input", () => {
   const pcm = Buffer.from([1, 2, 3, 4, 5, 6]);
   assert.deepEqual(wavToPcm(pcmToWav(pcm)), pcm);
   assert.deepEqual(wavToPcm(pcm), pcm);
+});
+
+test("silence around a reply is cut before transcribing; pure silence is dropped", () => {
+  // 1 s of line hiss, 0.5 s of "speech", 2 s of hiss: what Asterisk records before its silence timeout.
+  const samples = (seconds: number, amp: number) => {
+    const b = Buffer.alloc(seconds * 8000 * 2);
+    for (let i = 0; i < b.length; i += 2) b.writeInt16LE(Math.round(Math.sin(i / 7) * amp), i);
+    return b;
+  };
+  const reply = Buffer.concat([samples(1, 60), samples(0.5, 6000), samples(2, 60)]);
+  const cut = trimSilence(reply);
+  const seconds = cut.length / 16000;
+  assert.ok(seconds >= 0.5 && seconds <= 1.1, `kept ${seconds}s`);
+  assert.equal(trimSilence(samples(3, 60)).length, 0, "only hiss: nothing to transcribe");
+  assert.equal(trimSilence(Buffer.alloc(0)).length, 0);
 });

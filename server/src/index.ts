@@ -64,7 +64,7 @@ const assistant = new Assistant(
 // credentials; otherwise the Mac's built-in voices.
 const ttsEngine = process.env.TTS_ENGINE ?? (process.env.PUBLIC_URL?.startsWith("https://") ? "polly" : "say");
 const tts: Tts = ttsEngine === "polly" ? new PollyTts(join(root, "data/local/tts")) : new LocalTts(join(root, "data/local/tts"), process.env.FFMPEG ?? "ffmpeg");
-const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech("Matthew", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN") : undefined;
+const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech("Matthew", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN", process.env.PHONE_VOICE_ENGINE === "generative" ? "generative" : "neural") : undefined;
 
 // Local secrets (git-ignored). On AWS these live in Secrets Manager.
 const secretsFile = join(root, "data/local/secrets.json");

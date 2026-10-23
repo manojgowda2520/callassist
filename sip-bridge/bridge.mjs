@@ -28,6 +28,8 @@ const cfg = {
   callerId: process.env.CALLER_ID ?? "CallAssist",
   maxSilence: Number(process.env.MAX_SILENCE_SECONDS ?? 2),
   maxReply: Number(process.env.MAX_REPLY_SECONDS ?? 15),
+  // Said the moment the person stops talking, while their reply is transcribed. Empty turns it off.
+  ack: process.env.ACK_TEXT ?? "Okay.",
 };
 
 function must(name) {
@@ -163,8 +165,8 @@ async function hangUp(chanId, call) {
   await ari("DELETE", `/channels/${chanId}`).catch(() => {});
 }
 
-async function speak(chanId, call, text) {
-  if (!text || !call.live) return;
+/** Makes sure the spoken audio for `text` is in the sounds folder; returns its file name. */
+async function ensureSound(text) {
   const file = createHash("sha1").update(text).digest("hex").slice(0, 20);
   const path = join(cfg.sounds, `${file}.wav`);
   if (!existsSync(path)) {
@@ -172,13 +174,20 @@ async function speak(chanId, call, text) {
     if (!res.ok) throw new Error(`tts ${res.status}`);
     writeFileSync(path, Buffer.from(await res.arrayBuffer()));
   }
+  return file;
+}
+
+async function speak(chanId, call, text) {
+  if (!text || !call.live) return;
+  const file = await ensureSound(text);
   const pb = await ari("POST", `/channels/${chanId}/play`, { media: `sound:callassist/${file}` });
   if (!pb) return;
   await waitFor((e) => (e.type === "PlaybackFinished" && e.playback?.id === pb.id) || (e.type === "ChannelDestroyed" && e.channel?.id === chanId), 60_000);
 }
 
+// Returns what the person said, and the "Okay." playing meanwhile (wait for it before the next line).
 async function listen(chanId, call, n) {
-  if (!call.live) return "";
+  if (!call.live) return { text: "", ack: Promise.resolve() };
   const name = `callassist-${call.callId.slice(0, 8)}-${n}`;
   await ari("POST", `/channels/${chanId}/record`, {
     name,
@@ -193,9 +202,12 @@ async function listen(chanId, call, n) {
     (e) => ((e.type === "RecordingFinished" || e.type === "RecordingFailed") && e.recording?.name === name) || (e.type === "ChannelDestroyed" && e.channel?.id === chanId),
     (cfg.maxReply + 5) * 1000,
   );
+  call.stoppedAt = Date.now();
   const path = join(cfg.recordings, `${name}.wav`);
-  if (!existsSync(path)) return "";
+  if (!existsSync(path)) return { text: "", ack: Promise.resolve() };
   const audio = readFileSync(path);
+  // Half a second or more recorded: they said something, so acknowledge right away.
+  const ack = cfg.ack && audio.length > 44 + 8000 ? speak(chanId, call, cfg.ack).catch(() => {}) : Promise.resolve();
   // Replies are only kept long enough to transcribe them.
   try {
     unlinkSync(path);
@@ -203,10 +215,11 @@ async function listen(chanId, call, n) {
   const res = await ca("/sip/stt", { method: "POST", headers: { "content-type": "audio/wav" }, body: audio });
   const { text } = await res.json().catch(() => ({ text: "" }));
   log("heard", { callId: call.callId, chars: (text ?? "").length });
-  return text ?? "";
+  return { text: text ?? "", ack };
 }
 
 async function runConversation(chanId, call) {
+  if (cfg.ack) ensureSound(cfg.ack).catch(() => {});
   let r = await turn(call.callId, "answered");
   for (let n = 1; call.live && n <= 12; n++) {
     await speak(chanId, call, r.say);
@@ -215,9 +228,12 @@ async function runConversation(chanId, call) {
       await hangUp(chanId, call);
       return;
     }
-    const text = await listen(chanId, call, n);
+    const { text, ack } = await listen(chanId, call, n);
     if (!call.live) return;
     r = await turn(call.callId, "heard", text);
+    if (r.say) await ensureSound(r.say).catch(() => {});
+    await ack;
+    log("reply_ready", { callId: call.callId, msAfterTheyStopped: Date.now() - call.stoppedAt });
   }
   await hangUp(chanId, call);
 }
