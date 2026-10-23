@@ -24,6 +24,25 @@
       }
     },
     {
+      "id": "c_neeta",
+      "name": "Neeta",
+      "label": "front desk",
+      "aliases": [
+        "front desk",
+        "reception",
+        "receptionist",
+        "office manager"
+      ],
+      "phone": "+15550100006",
+      "consent": true,
+      "optedOut": false,
+      "consentRecord": {
+        "at": "2026-10-20T10:00:00Z",
+        "method": "written (volunteer form)",
+        "wording": "I agree to receive AI-voice phone calls from CallAssist on behalf of the user, about tasks and messages. I can say stop at any time."
+      }
+    },
+    {
       "id": "c_lakshmi",
       "name": "Lakshmi",
       "label": "home help",

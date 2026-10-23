@@ -36,8 +36,10 @@
   .step .num { background: linear-gradient(135deg, #0a7cff, #8b5cf6); color: #fff; }
   .step.done .num { background: var(--green); }
   .say b { background: linear-gradient(90deg, #0a7cff, #8b5cf6); -webkit-background-clip: text; color: transparent; }
-  .alexa { grid-column: 1; grid-row: 2; } .phones { grid-column: 2; grid-row: 2; }
-  .log { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; height: 760px; background: #0b0f17; color: #cfd6e4; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .team { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+  .team span { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; } .team i { font-style: normal; font-weight: 650; color: var(--ink); }
+  .alexa { grid-column: 1; grid-row: 3; } .phones { grid-column: 2; grid-row: 3; }
+  .log { grid-column: 3; grid-row: 3; display: flex; flex-direction: column; height: 760px; background: #0b0f17; color: #cfd6e4; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .log header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #ffffff1a; }
   .log header b { font-size: 15px; color: #fff; } .log header span { font-size: 12px; color: #8d98ad; }
   .log .dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; animation: pulse 1.6s infinite; }
@@ -58,7 +60,7 @@
   .intro h1 { font-size: 20px; } .intro .lead { font-size: 13px; margin: 0; }
   .actions .row { margin-top: 0; flex-direction: column; } .actions .note { margin: 8px 0 0; }
   .alexa { height: 760px; }
-  @media (max-width: 1180px) { .wrap, .wrap > .panel { grid-template-columns: 1fr; } .alexa, .phones, .log { grid-column: auto; grid-row: auto; } .log { height: 420px; } .alexa { height: 640px; } }
+  @media (max-width: 1180px) { .wrap, .wrap > .panel { grid-template-columns: 1fr; } .team, .alexa, .phones, .log { grid-column: auto; grid-row: auto; } .log { height: 420px; } .alexa { height: 640px; } }
 </style>
 </head>
 <body>
@@ -79,9 +81,9 @@
     </div>
 
     <div class="step" data-step="2">
-      <h3><span class="num">2</span>Say it your own way</h3>
-      <ol><li>Alexa+ understands free-form requests (Amazon Nova Pro picks the tool).</li><li>Say yes, then answer the pantry phone.</li></ol>
-      <button class="say" data-say="Hey, could you get me a chai? I'm stuck in a meeting" data-phone="c_raju"><b>Say</b>Hey, could you get me a chai? I'm stuck in a meeting</button>
+      <h3><span class="num">2</span>Book an appointment, in your own words</h3>
+      <ol><li>Neeta at the front desk handles appointments. Amazon Nova Pro understands the free-form request.</li><li>Say yes, then answer Neeta's phone.</li></ol>
+      <button class="say" data-say="Can Neeta book a meeting with the client tomorrow at 11?" data-phone="c_neeta"><b>Say</b>Can Neeta book a meeting with the client tomorrow at 11?</button>
     </div>
 
     <div class="step" data-step="3">
@@ -112,6 +114,10 @@
     </details>
   </section>
 
+  <div class="team"><b>Madhu's team:</b>
+    <span><i>Raju</i> · office pantry · tea, coffee, snacks</span><span><i>Neeta</i> · front desk · appointments, meetings, visitors</span>
+    <span><i>Ravi</i> · driver · the car, pickups</span><span><i>Lakshmi</i> · home help · cooking, groceries</span><span><i>Grandma</i> · family</span></div>
+
   <iframe class="alexa" id="alexa" src="/alexa?embed=1" allow="autoplay; microphone" title="Alexa+ emulator"></iframe>
 
   <section class="log" id="mcplog">
@@ -133,7 +139,7 @@ const $ = (id) => document.getElementById(id);
 $("mcpUrl").textContent = `${location.origin}/mcp`;
 $("oauthUrl").textContent = `${location.origin}/.well-known/oauth-authorization-server`;
 
-const PHONES = [["c_raju", "Raju"], ["c_grandma", "Grandma"], ["c_lakshmi", "Lakshmi"], ["c_ravi", "Ravi"]];
+const PHONES = [["c_raju", "Raju"], ["c_neeta", "Neeta"], ["c_grandma", "Grandma"], ["c_ravi", "Ravi"]];
 let current = "c_raju";
 const showPhone = (id) => {
   if (id === current) return;
