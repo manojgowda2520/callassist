@@ -226,7 +226,8 @@ $("wakeBtn").onclick = () => { tones.unlock(); $("wake").remove(); voice.push("H
 
 // The /try page drives this emulator from its guided steps.
 window.say = (text) => say(text);
-if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+// Inside the /try page (also after the account-linking redirect drops ?embed=1).
+if (new URLSearchParams(location.search).has("embed") || window.self !== window.top) document.body.classList.add("embed");
 
 async function say(text) {
   $("said").textContent = `“${text}”`;
