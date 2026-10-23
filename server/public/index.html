@@ -48,6 +48,16 @@
   .arrow { color: var(--brand); font-size: 26px; text-align: center; }
   .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
   .tags span { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--ink-2); }
+  html { scroll-behavior: smooth; }
+  .wide { max-width: 1500px; margin: 0 auto; padding: 0 20px; }
+  .live { background: linear-gradient(180deg, #eef4ff, #f6f0ff); }
+  .demo { width: 100%; height: 1130px; border: 0; border-radius: 18px; background: transparent; }
+  .eyebrow { background: linear-gradient(90deg, #0a7cff, #8b5cf6, #ec4899); -webkit-background-clip: text; color: transparent; display: inline-block; }
+  .card { border-top: 3px solid transparent; border-image: linear-gradient(90deg, #0a7cff, #8b5cf6) 1; border-image-slice: 1; }
+  .steps .card:nth-child(2) .n { background: #8b5cf6; } .steps .card:nth-child(3) .n { background: #ec4899; } .steps .card:nth-child(4) .n { background: #16a34a; }
+  .say span:nth-child(3n+2) { background: #f5f0ff; border-color: #e5d8ff; } .say span:nth-child(3n) { background: #fff0f6; border-color: #ffd6e7; }
+  .hero { background: radial-gradient(800px 420px at 10% 0%, #1d4ed8 0%, transparent 60%), radial-gradient(700px 420px at 90% 20%, #7c3aed 0%, transparent 60%), #0b0f17; }
+  @media (max-width: 1180px) { .demo { height: 2200px; } }
   footer { padding: 36px 0 60px; color: var(--ink-3); font-size: 14px; }
   footer a { margin-right: 14px; }
   @media (max-width: 900px) { .steps, .grid3 { grid-template-columns: 1fr 1fr; } .arch { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
@@ -57,7 +67,7 @@
 <body>
 <header class="topbar">
   <div class="logo"><span class="dot"></span>CallAssist</div>
-  <nav><a href="/try">Try it</a><a href="/alexa">Alexa+ emulator</a><a href="/phones">Team phones</a><a href="/console">Call console</a><a href="/" class="active">About</a></nav>
+  <nav><a href="#live">Live demo</a><a href="#video">Video</a><a href="#how">How it works</a><a href="#fit">MCP &amp; hackathon</a><a href="#arch">Architecture</a><a href="#safety">Safety</a><a href="https://github.com/manojgowda2520/callassist" target="_blank" rel="noopener">GitHub</a></nav>
 </header>
 
 <section class="hero">
@@ -69,10 +79,19 @@
     <h1>Your personal assistant,<br><span>on the phone.</span></h1>
     <p>CallAssist is an Alexa+ add-on, built as an MCP server, that phones your people for you. Tell Alexa what needs doing. CallAssist calls the right person, hands over the task, gets a yes and a time, follows up, and tells you when it's done.</p>
     <div class="cta">
-      <a class="primary" href="/try">Try it now, no setup</a>
+      <a class="primary" href="#live">Try it now, no setup</a>
       <a class="ghost" href="#video">Watch the demo</a>
       <a class="ghost" href="https://github.com/manojgowda2520/callassist" target="_blank" rel="noopener">Source on GitHub</a>
     </div>
+  </div>
+</section>
+
+<section id="live" class="live">
+  <div class="wide">
+    <p class="eyebrow">Live demo · right here</p>
+    <h2>Talk to Alexa+. Answer the phone. Watch the MCP traffic.</h2>
+    <p class="sub">Tap a green line to say it, answer the phone next to it, and follow every MCP tool call in the live log on the right. Only demo phones ring here.</p>
+    <iframe class="demo" src="/try?embed=1" allow="autoplay; microphone" title="CallAssist live demo"></iframe>
   </div>
 </section>
 
@@ -85,7 +104,7 @@
   </div>
 </section>
 
-<section>
+<section id="how">
   <div class="wrap">
     <p class="eyebrow">The problem</p>
     <h2>The people who get things done don't use apps. They answer the phone.</h2>
@@ -112,7 +131,7 @@
   </div>
 </section>
 
-<section>
+<section id="fit">
   <div class="wrap">
     <p class="eyebrow">Hackathon fit</p>
     <h2>Built for the Alexa+ track, on AWS, in the open</h2>
@@ -128,7 +147,7 @@
   </div>
 </section>
 
-<section>
+<section id="arch">
   <div class="wrap">
     <p class="eyebrow">Architecture</p>
     <h2>One MCP server, any phone line</h2>
@@ -145,7 +164,7 @@
   </div>
 </section>
 
-<section>
+<section id="safety">
   <div class="wrap">
     <p class="eyebrow">Safety</p>
     <h2>Enforced by the server, not the prompt</h2>
@@ -165,7 +184,7 @@
     <p class="eyebrow">Try it</p>
     <h2>Judge it yourself in 3 minutes</h2>
     <p class="sub">The Try it page puts Alexa+ next to the team's phones, with guided steps. Only demo phones ring there; no real numbers are called.</p>
-    <div class="cta"><a class="primary" href="/try">Open the test drive</a><a class="plain" href="/console">See the call console</a></div>
+    <div class="cta"><a class="primary" href="#live">Back to the live demo</a><a class="plain" href="/try" target="_blank">Open it full screen</a></div>
   </div>
 </section>
 

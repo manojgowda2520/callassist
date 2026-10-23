@@ -31,7 +31,34 @@
   details { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
   details summary { cursor: pointer; font-weight: 600; color: var(--ink); }
   code { font-family: var(--mono); font-size: 12px; background: #f0f2f5; padding: 1px 5px; border-radius: 5px; word-break: break-all; }
-  @media (max-width: 1180px) { .wrap { grid-template-columns: 1fr; } .alexa { height: 640px; } }
+  body { background: linear-gradient(180deg, #eef4ff 0%, #f7f3ff 40%, var(--bg) 100%); }
+  body.embed { background: transparent; } body.embed .topbar { display: none; } body.embed .wrap { padding-top: 6px; }
+  .step .num { background: linear-gradient(135deg, #0a7cff, #8b5cf6); color: #fff; }
+  .step.done .num { background: var(--green); }
+  .say b { background: linear-gradient(90deg, #0a7cff, #8b5cf6); -webkit-background-clip: text; color: transparent; }
+  .alexa { grid-column: 1; grid-row: 2; } .phones { grid-column: 2; grid-row: 2; }
+  .log { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; height: 760px; background: #0b0f17; color: #cfd6e4; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .log header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #ffffff1a; }
+  .log header b { font-size: 15px; color: #fff; } .log header span { font-size: 12px; color: #8d98ad; }
+  .log .dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .log .legend { margin-left: auto; display: flex; gap: 12px; font-size: 12px; }
+  .lines { flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 12.5px; padding: 8px 0; }
+  .ln { display: grid; grid-template-columns: 74px 26px 1fr; gap: 6px; padding: 3px 16px; cursor: pointer; }
+  .ln:hover { background: #ffffff08; } .ln .t { color: #5b6678; } .ln pre { grid-column: 3; margin: 4px 0; white-space: pre-wrap; color: #9fb0c8; display: none; }
+  .ln.open pre { display: block; }
+  .req { color: #60a5fa; } .res { color: #34d399; } .err { color: #f87171; } .evt { color: #fbbf24; } .ui { color: #c084fc; }
+  .ln .m { color: #fff; font-weight: 600; } .ln .d { color: #9fb0c8; }
+  .empty-log { color: #5b6678; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; }
+  /* One screen: steps across the top, then Alexa | phone | live MCP log. */
+  .wrap { grid-template-columns: minmax(420px, 1.25fr) 330px minmax(340px, 1fr); }
+  .wrap > .panel { grid-column: 1 / -1; display: grid; grid-template-columns: 250px repeat(4, 1fr) 190px; gap: 12px; align-items: stretch; }
+  .wrap > .panel .step { margin: 0; } .wrap > .panel .step ol { font-size: 12px; margin: 4px 0 6px 16px; }
+  .wrap > .panel details { grid-column: 1 / -1; margin-top: 0; }
+  .intro h1 { font-size: 20px; } .intro .lead { font-size: 13px; margin: 0; }
+  .actions .row { margin-top: 0; flex-direction: column; } .actions .note { margin: 8px 0 0; }
+  .alexa { height: 760px; }
+  @media (max-width: 1180px) { .wrap, .wrap > .panel { grid-template-columns: 1fr; } .alexa, .phones, .log { grid-column: auto; grid-row: auto; } .log { height: 420px; } .alexa { height: 640px; } }
 </style>
 </head>
 <body>
@@ -42,8 +69,8 @@
 
 <div class="wrap">
   <section class="panel">
-    <h1>Try CallAssist in 3 minutes</h1>
-    <p class="lead">You are Madhu. Talk to Alexa+ in the middle; the person CallAssist phones answers on the right. Tap a green line to say it, or type anything in your own words. Only these demo phones ring: no real numbers are called from this page.</p>
+    <div class="intro"><h1>Try CallAssist in 3 minutes</h1>
+    <p class="lead">You are Madhu. Talk to Alexa+, answer the phone next to it, and watch the MCP log. Tap a green line to say it, or type anything in your own words. Only these demo phones ring: no real numbers are called from this page.</p></div>
 
     <div class="step active" data-step="1">
       <h3><span class="num">1</span>Give someone a task</h3>
@@ -69,11 +96,11 @@
       <button class="say" data-say="Any update from Raju?"><b>Say</b>Any update from Raju?</button>
     </div>
 
-    <div class="row">
+    <div class="actions"><div class="row">
       <button class="btn primary" id="yes">Say "Yes"</button>
       <button class="btn" id="reset" title="Clears all tasks and calls">Start over</button>
     </div>
-    <p class="note">First time? Tap <b>Tap to start</b> on the Echo Show and <b>Link account</b> (one tap, like enabling a skill). Turn your sound on to hear Alexa and the call.</p>
+    <p class="note">First time? Tap <b>Tap to start</b> on the Echo Show and <b>Link account</b> (one tap, like enabling a skill). Turn your sound on to hear Alexa and the call.</p></div>
 
     <details>
       <summary>Connect CallAssist to your own Alexa+ or MCP client</summary>
@@ -86,6 +113,13 @@
   </section>
 
   <iframe class="alexa" id="alexa" src="/alexa?embed=1" allow="autoplay; microphone" title="Alexa+ emulator"></iframe>
+
+  <section class="log" id="mcplog">
+    <header><span class="dot"></span><b>Live MCP log</b>
+      <div class="legend"><span class="req">→ request</span><span class="res">← result</span><span class="ui">◆ MCP App</span><span class="evt">☎ call</span></div></header>
+    <div class="note" style="padding:8px 16px 0;color:#8d98ad">JSON-RPC between Alexa+ and the CallAssist MCP server, and phone-call events. Tap a line for the full message.</div>
+    <div class="lines" id="lines"><div class="empty-log">Waiting for traffic… say something to Alexa.</div></div>
+  </section>
 
   <section class="phones">
     <div class="tabs" id="tabs"></div>
@@ -148,6 +182,44 @@ $("reset").onclick = async () => {
   $("phone").src = `/phone/${current}?embed=1`;
 };
 
+// The live MCP log.
+if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+const lines = $("lines");
+const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const pending = new Map();
+function addLine(cls, arrow, main, detail, full) {
+  lines.querySelector(".empty-log")?.remove();
+  const d = document.createElement("div");
+  d.className = "ln";
+  d.innerHTML = `<span class="t">${new Date().toLocaleTimeString([], { hour12: false })}</span><span class="${cls}">${arrow}</span><span><span class="m">${esc(main)}</span> <span class="d">${esc(detail)}</span></span>${full ? `<pre>${esc(JSON.stringify(full, null, 2)).slice(0, 4000)}</pre>` : ""}`;
+  d.onclick = () => d.classList.toggle("open");
+  lines.append(d);
+  while (lines.children.length > 200) lines.firstChild.remove();
+  lines.scrollTop = lines.scrollHeight;
+}
+const brief = (o) => Object.entries(o ?? {}).filter(([k]) => k !== "confirmationToken").map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ").slice(0, 160);
+try {
+  const tr = new EventSource("/api/alexa/traffic");
+  tr.addEventListener("traffic", (m) => {
+    const t = JSON.parse(m.data);
+    const msgs = Array.isArray(t.body) ? t.body : [t.body];
+    for (const b of msgs) {
+      if (!b) continue;
+      if (t.direction === "request") {
+        if (b.id !== undefined) pending.set(b.id, b);
+        const name = b.params?.name ?? b.params?.uri ?? "";
+        addLine(b.method === "resources/read" ? "ui" : "req", b.method === "resources/read" ? "◆" : "→", `${b.method}${name ? " · " + name : ""}`, b.method === "tools/call" ? brief(b.params?.arguments) : "", b);
+      } else {
+        const req = pending.get(b.id); pending.delete(b.id);
+        const sc = b.result?.structuredContent;
+        const label = `${req?.method ?? "result"}${req?.params?.name ? " · " + req.params.name : ""}`;
+        if (b.error) addLine("err", "✕", label, b.error.message, b);
+        else addLine("res", "←", label, sc?.speech ? `“${sc.speech}”` : sc?.needsConfirmation ? "needs the user's yes" : req?.method === "tools/list" ? `${b.result?.tools?.length} tools` : "ok", b);
+      }
+    }
+  });
+} catch {}
+
 // Follow the call: when CallAssist rings someone, show that person's phone.
 try {
   const es = new EventSource("/api/events");
@@ -155,6 +227,7 @@ try {
     try {
       const c = JSON.parse(m.data);
       if (c.status === "ringing" && PHONES.some((p) => p[0] === c.contactId)) showPhone(c.contactId);
+      if (["ringing", "in_progress", "completed", "no_answer", "failed", "cancelled"].includes(c.status)) addLine("evt", "☎", `call ${c.status.replace("_", " ")}`, `${c.contactName ?? ""} · ${c.purpose ?? ""}${c.outcome ? " · " + c.outcome : ""}`, null);
     } catch {}
   });
 } catch {}

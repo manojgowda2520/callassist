@@ -106,7 +106,7 @@ npm test
 
 - MCP TypeScript SDK, Streamable HTTP (stateless), spec 2025-11-25 with negotiation down to 2025-03-26
 - Alexa+ emulator brain: Amazon Nova Pro on Amazon Bedrock (Converse API with the MCP tools), with instant rules for common phrases and as a fallback
-- Voices: Amazon Polly generative (Danielle for Alexa), Polly Kajal (Indian English) on the SIP line; speech to text: Amazon Transcribe streaming
+- Voices: Amazon Polly generative, Danielle everywhere (Alexa, the demo phones and real calls); speech to text: Amazon Transcribe streaming
 - Phone lines: Amazon Connect (outbound voice and WebRTC browser calling) for US numbers; a SIP bridge (`sip-bridge/`, Asterisk ARI) for India, with talk detection
 - AWS (us-east-1): EC2 Graviton + Docker behind CloudFront, ECR (scan on push), Secrets Manager, SSM, CloudWatch EMF metrics, all in CloudFormation (`infra/`)
 - CI/CD: GitHub Actions with OIDC: tests, cfn-lint, cfn-guard, gitleaks, npm audit, Trivy, then ECR and an SSM deploy with automatic rollback

@@ -1,6 +1,6 @@
 // Text-to-speech for the Alexa+ emulator and the phones.
 // On AWS: Amazon Polly generative voices, the closest to the Alexa+ voice
-// ("Danielle" for Alexa, "Matthew" for CallAssist on the phone). On a Mac
+// (Danielle for Alexa and for CallAssist on the phone). On a Mac
 // without AWS: the built-in `say` voices. Clips are cached by text.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -58,7 +58,7 @@ export class PollyTts extends CachedTts {
   readonly available = true;
   private client: PollyClient;
 
-  constructor(dir: string, private voices: Record<VoiceRole, VoiceId> = { alexa: "Danielle", agent: "Matthew" }, region = process.env.AWS_REGION ?? "us-east-1") {
+  constructor(dir: string, private voices: Record<VoiceRole, VoiceId> = { alexa: "Danielle", agent: "Danielle" }, region = process.env.AWS_REGION ?? "us-east-1") {
     super(dir);
     this.client = new PollyClient({ region });
   }

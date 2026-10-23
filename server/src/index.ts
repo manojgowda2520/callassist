@@ -70,7 +70,7 @@ const tts: Tts = ttsEngine === "polly" ? new PollyTts(join(root, "data/local/tts
 // ALEXA_BRAIN=nova turns it on locally with AWS credentials).
 const alexaBrain = process.env.ALEXA_BRAIN ?? (ttsEngine === "polly" ? "nova" : "rules");
 const alexaPlanner = alexaBrain === "nova" ? new NovaPlanner(skillText().body, process.env.ALEXA_MODEL ?? "us.amazon.nova-pro-v1:0") : undefined;
-const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech((process.env.PHONE_VOICE as "Kajal" | undefined) ?? "Kajal", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN", process.env.PHONE_VOICE_ENGINE === "generative" ? "generative" : "neural") : undefined;
+const phoneSpeech = ttsEngine === "polly" ? new AwsPhoneSpeech((process.env.PHONE_VOICE as "Danielle" | undefined) ?? "Danielle", (process.env.SIP_LANGUAGE as "en-IN" | undefined) ?? "en-IN", process.env.PHONE_VOICE_ENGINE === "neural" ? "neural" : "generative") : undefined;
 
 // Local secrets (git-ignored). On AWS these live in Secrets Manager.
 const secretsFile = join(root, "data/local/secrets.json");

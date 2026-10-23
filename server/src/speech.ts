@@ -80,7 +80,7 @@ export class AwsPhoneSpeech implements PhoneSpeech {
   private transcribeClient: TranscribeStreamingClient;
 
   constructor(
-    private voice: VoiceId = "Matthew",
+    private voice: VoiceId = "Danielle",
     private language: LanguageCode = "en-IN",
     /** "neural" answers in a few hundred ms; "generative" sounds richer but is slower, and phone audio is 8 kHz anyway. */
     private engine: "neural" | "generative" = "neural",

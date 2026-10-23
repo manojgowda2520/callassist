@@ -26,7 +26,7 @@ Parameters:
     Description: The CallAssist app secret (output AppSecretArn of the app stack). The phone-agent client secret is derived from it.
   Voice:
     Type: String
-    Default: Matthew
+    Default: Danielle
     AllowedValues: [Joanna, Matthew, Ruth, Stephen, Danielle, Gregory]
     Description: Neural voice for the calls.
 
